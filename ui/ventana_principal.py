@@ -62,6 +62,11 @@ class MainWindow(QMainWindow):
         ])
         self._agregar_menu("&Grafos", [
             ("Grafo de Prueba", vista.cargar_grafo_prueba, "Ctrl+T"),
+            ("Grafo Aleatorio…", vista.generar_grafo_aleatorio, "Ctrl+G"),
+            None,
+            ("Importar Lista de Adyacencia…", vista.importar_lista_adyacencia, "Ctrl+I"),
+            ("Exportar Lista de Adyacencia…", vista.exportar_lista_adyacencia, "Ctrl+Shift+I"),
+            None,
             ("Recorrido Seleccionado", vista.conservar_recorrido, "Ctrl+R"),
         ])
         self._agregar_menu("&Algoritmos", [

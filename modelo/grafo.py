@@ -3,6 +3,9 @@ import json
 
 import networkx as nx
 
+from modelo.generacion import distribuir, grafo_aleatorio
+from modelo.lista_adyacencia import escribir_lista_adyacencia, leer_lista_adyacencia
+
 COLOR_POR_DEFECTO = "black"
 
 
@@ -173,6 +176,35 @@ class ModeloGrafo:
                 nuevo.agregar_arista(origen, destino, peso)
         except (SyntaxError, TypeError) as error:
             raise ValueError(f"Formato de grafo inválido: {error}") from error
+        self._reemplazar(nuevo)
+
+    def generar_aleatorio(self, semilla=None, **opciones):
+        """Reemplaza el grafo por uno aleatorio; ``opciones`` son las de ``grafo_aleatorio``."""
+        self._reemplazar_grafo(grafo_aleatorio(semilla=semilla, **opciones), semilla)
+
+    def importar_lista_adyacencia(self, texto):
+        dirigido, nodos, aristas = leer_lista_adyacencia(texto)
+        grafo = nx.DiGraph() if dirigido else nx.Graph()
+        grafo.add_nodes_from(nodos)
+        grafo.add_weighted_edges_from(aristas)
+        self._reemplazar_grafo(grafo)
+
+    def cargar_lista_adyacencia(self, ruta):
+        with open(ruta, encoding="utf-8") as archivo:
+            self.importar_lista_adyacencia(archivo.read())
+
+    def lista_adyacencia(self):
+        return escribir_lista_adyacencia(self.grafo)
+
+    def guardar_lista_adyacencia(self, ruta):
+        with open(ruta, "w", encoding="utf-8") as archivo:
+            archivo.write(self.lista_adyacencia())
+
+    def _reemplazar_grafo(self, grafo, semilla=0):
+        """Usa ``grafo`` y ubica sus nodos automáticamente en el área de dibujo."""
+        nuevo = ModeloGrafo(grafo.is_directed())
+        nuevo.grafo = grafo
+        nuevo.posiciones = distribuir(grafo, semilla)
         self._reemplazar(nuevo)
 
     def _reemplazar(self, otro):

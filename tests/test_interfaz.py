@@ -22,6 +22,15 @@ def app():
     return QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
 
+@pytest.fixture(autouse=True)
+def sin_dialogos_modales(monkeypatch):
+    """Un diálogo modal sin simular dejaría la prueba esperando una respuesta: se hace fallar al instante."""
+    def bloquear(dialogo, *_):
+        raise AssertionError(f"Diálogo modal inesperado: {type(dialogo).__name__} «{dialogo.windowTitle()}»")
+    for clase in (QtWidgets.QDialog, QtWidgets.QMessageBox, QtWidgets.QMenu):
+        monkeypatch.setattr(clase, "exec", bloquear)
+
+
 @pytest.fixture
 def avisos(monkeypatch):
     mensajes = []
@@ -584,6 +593,51 @@ class TestAlgoritmosNuevos:
         for origen, destino in ciclo:
             assert vista.lienzo._color_arista(origen, destino) == COLORES["ciclo"] or \
                 vista.lienzo._color_arista(destino, origen) == COLORES["ciclo"]
+
+
+class TestGrafosNuevos:
+    def test_dialogo_ajusta_el_maximo_de_aristas(self, app):
+        dialogo = dialogos.DialogoGrafoAleatorio()
+        dialogo.spn_nodos.setValue(4)
+        assert dialogo.spn_aristas.maximum() == 6
+        dialogo.chk_dirigido.setChecked(True)
+        assert dialogo.spn_aristas.maximum() == 12
+
+    def test_generar_aleatorio_y_deshacer(self, ventana, vista, monkeypatch):
+        opciones = {"cantidad_nodos": 6, "cantidad_aristas": 9, "peso_minimo": 1, "peso_maximo": 5,
+                    "dirigido": True, "conexo": True}
+        monkeypatch.setattr(panel_vista, "pedir_grafo_aleatorio", lambda *a, **k: opciones)
+        accion(ventana, "Grafo Aleatorio…").trigger()
+        assert vista.modelo.dirigido and vista.rb_dirigido.isChecked()
+        assert vista.modelo.grafo.number_of_edges() == 9
+        vista.pila_deshacer.undo()
+        assert vista.modelo.grafo.number_of_edges() == 17
+
+    def test_opciones_invalidas(self, vista, avisos, monkeypatch):
+        opciones = {"cantidad_nodos": 6, "cantidad_aristas": 2, "peso_minimo": 1, "peso_maximo": 5,
+                    "dirigido": False, "conexo": True}
+        monkeypatch.setattr(panel_vista, "pedir_grafo_aleatorio", lambda *a, **k: opciones)
+        vista.generar_grafo_aleatorio()
+        assert avisos == ["No se pudo generar el grafo:\nUn grafo conexo de 6 nodos necesita al menos 5 aristas."]
+
+    def test_exportar_e_importar_lista_de_adyacencia(self, ventana, vista, tmp_path, monkeypatch, confirmar):
+        ruta = tmp_path / "lista.txt"
+        monkeypatch.setattr(QtWidgets.QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (str(ruta), "")))
+        monkeypatch.setattr(QtWidgets.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: (str(ruta), "")))
+        original = vista.modelo.grafo.copy()
+        accion(ventana, "Exportar Lista de Adyacencia…").trigger()
+        assert ruta.read_text(encoding="utf-8").startswith("no dirigido\n1: 2(10), 3(6), 5(14), 7(9), 8(3)\n")
+        vista.limpiar()
+        accion(ventana, "Importar Lista de Adyacencia…").trigger()
+        assert nx.utils.graphs_equal(vista.modelo.grafo, original)
+
+    def test_importar_lista_invalida(self, ventana, vista, avisos, tmp_path, monkeypatch):
+        ruta = tmp_path / "mala.txt"
+        ruta.write_text("1: 2(x)\n", encoding="utf-8")
+        monkeypatch.setattr(QtWidgets.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: (str(ruta), "")))
+        accion(ventana, "Importar Lista de Adyacencia…").trigger()
+        assert avisos[0].startswith("No se pudo importar la lista de adyacencia:\nLínea 1:")
+        assert vista.modelo.grafo.number_of_edges() == 17
 
 
 class TestExportar:

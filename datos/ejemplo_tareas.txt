@@ -1,0 +1,11 @@
+# Ejemplo de lista de adyacencia: dependencias entre tareas de un proyecto.
+# Una arista 1 -> 3 significa que la tarea 1 debe hacerse antes que la 3; el peso son días de trabajo.
+# Prueba el orden topológico, la detección de ciclos o Bellman-Ford sobre este grafo.
+dirigido
+1: 3(2), 4(3)
+2: 4(1)
+3: 5(4)
+4: 5(2), 6(5)
+5: 7(1)
+6: 7(3)
+7:

@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (QFileDialog, QGroupBox, QHBoxLayout, QLabel, QMenu,
 
 import algoritmos
 from ui.comandos import ComandoModelo
-from ui.dialogos import pedir_arista, pedir_inicio_y_destino, pedir_nodo, pedir_peso
+from ui.dialogos import pedir_arista, pedir_grafo_aleatorio, pedir_inicio_y_destino, pedir_nodo, pedir_peso
 from ui.estilos import LEYENDAS, estilo_de_paso
 from ui.leyenda import Leyenda
 from ui.lienzo import Lienzo
@@ -451,6 +451,30 @@ class PanelVista(QWidget):
         if ruta:
             self._modificar("Cargar grafo", lambda: self.modelo.cargar_json(ruta), reiniciar_resultado=True,
                             prefijo_error="No se pudo cargar el grafo:\n")
+
+    def generar_grafo_aleatorio(self):
+        opciones = pedir_grafo_aleatorio(self, self.modelo.dirigido)
+        if opciones is not None:
+            self._modificar("Generar grafo aleatorio", lambda: self.modelo.generar_aleatorio(**opciones),
+                            reiniciar_resultado=True, prefijo_error="No se pudo generar el grafo:\n")
+
+    def importar_lista_adyacencia(self):
+        ruta, _ = QFileDialog.getOpenFileName(self, "Importar lista de adyacencia", str(CARPETA_DATOS),
+                                              "Texto (*.txt);;Todos los archivos (*)")
+        if ruta:
+            self._modificar("Importar lista de adyacencia", lambda: self.modelo.cargar_lista_adyacencia(ruta),
+                            reiniciar_resultado=True, prefijo_error="No se pudo importar la lista de adyacencia:\n")
+
+    def exportar_lista_adyacencia(self):
+        ruta, _ = QFileDialog.getSaveFileName(self, "Exportar lista de adyacencia", "", "Texto (*.txt)")
+        if not ruta:
+            return
+        try:
+            self.modelo.guardar_lista_adyacencia(ruta)
+        except OSError as error:
+            QMessageBox.critical(self, "Error", f"No se pudo exportar la lista de adyacencia:\n{error}")
+            return
+        self.notificacion.emit(f"Lista de adyacencia guardada en {ruta}")
 
     def cargar_grafo_prueba(self):
         self._modificar("Cargar grafo de prueba",
