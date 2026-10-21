@@ -8,6 +8,7 @@ from matplotlib.patches import Rectangle
 from PyQt6.QtCore import pyqtSignal
 
 from ui.estilos import COLORES, COLORES_DESTACADOS
+from ui.tema import TEMAS, color_en_tema
 
 TAMANO_NODO = 300  # área del nodo en puntos², el valor por defecto de networkx
 ANCHO_ARISTA = 1.0
@@ -50,6 +51,7 @@ class Lienzo(FigureCanvasQTAgg):
         self.modelo = modelo
         self.nodo_resaltado = None
         self.estilo = None
+        self.tema = TEMAS["claro"]
         self.limites = LIMITES_INICIALES
         self._arrastre = None
         self._desplazamiento = None
@@ -64,20 +66,23 @@ class Lienzo(FigureCanvasQTAgg):
     def dibujar(self):
         grafo = self.modelo.grafo
         posiciones = self.modelo.posiciones
+        tema = self.tema
         self.ejes.clear()
         self._aplicar_limites()
         self.ejes.axis("off")
-        self.ejes.add_patch(Rectangle((0, 0), 1, 1, linewidth=2, edgecolor="black", facecolor="none"))
+        self.ejes.add_patch(Rectangle((0, 0), 1, 1, linewidth=2, edgecolor=tema["marco"], facecolor="none"))
         aristas = list(grafo.edges)
         colores_aristas = [self._color_arista(*arista) for arista in aristas]
         discontinuas = self.estilo.discontinuas if self.estilo else set()
         nx.draw(grafo, pos=posiciones, with_labels=True, font_weight="bold", ax=self.ejes, node_size=TAMANO_NODO,
-                node_color=[self._color_nodo(nodo) for nodo in grafo.nodes],
-                edgelist=aristas, edge_color=colores_aristas,
+                node_color=[color_en_tema(tema, self._color_nodo(nodo)) for nodo in grafo.nodes],
+                edgelist=aristas, edge_color=[color_en_tema(tema, color) for color in colores_aristas],
                 width=[ANCHO_ARISTA_DESTACADA if color in COLORES_DESTACADOS else ANCHO_ARISTA for color in colores_aristas],
                 style=["dashed" if arista in discontinuas else "solid" for arista in aristas])
         nx.draw_networkx_edge_labels(grafo, pos=posiciones, edge_labels=nx.get_edge_attributes(grafo, "weight"),
-                                     ax=self.ejes)
+                                     ax=self.ejes, font_color=tema["texto"],
+                                     bbox={"boxstyle": "round", "ec": tema["fondo"], "fc": tema["fondo"]})
+        self.figure.set_facecolor(tema["fondo"])  # después de nx.draw, que lo pone en blanco
         self.draw_idle()
 
     def _color_nodo(self, nodo):

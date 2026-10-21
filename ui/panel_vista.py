@@ -157,6 +157,11 @@ class PanelVista(QWidget):
     def cancelar_seleccion(self):
         self.seleccionar(None)
 
+    def aplicar_tema(self, tema):
+        self.lienzo.tema = tema
+        self.leyenda.cambiar_tema(tema)
+        self.lienzo.dibujar()
+
     def nombre_arista(self, origen, destino):
         return f"{origen} → {destino}" if self.modelo.dirigido else f"{origen} - {destino}"
 

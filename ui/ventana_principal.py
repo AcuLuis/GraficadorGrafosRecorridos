@@ -1,20 +1,31 @@
 import sys
 
-from PyQt6.QtCore import QLibraryInfo, QLocale, Qt, QTranslator
+from PyQt6.QtCore import QLibraryInfo, QLocale, QSettings, Qt, QTranslator
 from PyQt6.QtGui import QAction, QKeySequence
 from PyQt6.QtWidgets import QApplication, QDockWidget, QLabel, QMainWindow
 
 from modelo import ModeloGrafo
 from ui.panel_informacion import PanelInformacion
 from ui.panel_vista import BELLMAN_FORD, BFS, CICLOS, DFS, DIJKSTRA, KRUSKAL, PRIM, TOPOLOGICO, PanelVista
+from ui.tema import TEMAS, paleta_oscura
 
 ANCHO_PANEL_LATERAL = 340
 DURACION_AVISO_MS = 3000
+ORGANIZACION = "GraficadorGrafos"
+APLICACION = "Graficador de Grafos"
+CLAVE_TEMA_OSCURO = "tema_oscuro"
+PROPIEDAD_ESTILO_ORIGINAL = "estilo_original"
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    """Ventana principal. ``configuracion`` guarda las preferencias (por defecto, las del usuario)."""
+
+    def __init__(self, configuracion=None):
         super().__init__()
+        self.configuracion = configuracion if configuracion is not None else QSettings(ORGANIZACION, APLICACION)
+        app = QApplication.instance()
+        if app.property(PROPIEDAD_ESTILO_ORIGINAL) is None:
+            app.setProperty(PROPIEDAD_ESTILO_ORIGINAL, app.style().name())
         self.setWindowTitle("VISUALIZADOR")
         self.resize(1200, 900)
         self.modelo = ModeloGrafo()
@@ -24,13 +35,32 @@ class MainWindow(QMainWindow):
         self._crear_panel_lateral()
         self._crear_menus()
         self._crear_barra_de_estado()
+        self.aplicar_tema(self.configuracion.value(CLAVE_TEMA_OSCURO, False, type=bool), guardar=False)
 
     def _crear_panel_lateral(self):
-        dock = QDockWidget("Panel de Información", self)
-        dock.setWidget(self.panel_info)
-        dock.setMinimumWidth(ANCHO_PANEL_LATERAL)
-        dock.setStyleSheet("QDockWidget::title { background: lightblue; }")
-        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, dock)
+        self.dock = QDockWidget("Panel de Información", self)
+        self.dock.setWidget(self.panel_info)
+        self.dock.setMinimumWidth(ANCHO_PANEL_LATERAL)
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.dock)
+
+    def aplicar_tema(self, oscuro, guardar=True):
+        """Cambia entre el tema claro y el oscuro; si ``guardar``, lo recuerda para la próxima vez."""
+        app = QApplication.instance()
+        # Cambiar el estilo vuelve a pulir todos los widgets: solo se hace si el tema cambia.
+        if bool(app.property(CLAVE_TEMA_OSCURO)) != oscuro:
+            if oscuro:
+                app.setStyle("Fusion")
+                app.setPalette(paleta_oscura())
+            else:
+                app.setStyle(app.property(PROPIEDAD_ESTILO_ORIGINAL))
+                app.setPalette(app.style().standardPalette())
+            app.setProperty(CLAVE_TEMA_OSCURO, oscuro)
+        tema = TEMAS["oscuro" if oscuro else "claro"]
+        self.dock.setStyleSheet(f"QDockWidget::title {{ background: {tema['panel']}; }}")
+        self.panel_vista.aplicar_tema(tema)
+        self.accion_tema_oscuro.setChecked(oscuro)
+        if guardar:
+            self.configuracion.setValue(CLAVE_TEMA_OSCURO, oscuro)
 
     def _crear_menus(self):
         vista = self.panel_vista
@@ -83,10 +113,16 @@ class MainWindow(QMainWindow):
             (CICLOS, vista.ejecutar_ciclos, "Ctrl+8"),
         ])
         lienzo = vista.lienzo
+        self.accion_tema_oscuro = QAction("Tema Oscuro", self)
+        self.accion_tema_oscuro.setCheckable(True)
+        self.accion_tema_oscuro.setShortcut(QKeySequence("Ctrl+Shift+D"))
+        self.accion_tema_oscuro.triggered.connect(self.aplicar_tema)
         self._agregar_menu("&Ver", [
             ("Acercar", lienzo.acercar, teclas.ZoomIn),
             ("Alejar", lienzo.alejar, teclas.ZoomOut),
             ("Restablecer Vista", lienzo.restablecer_vista, "Ctrl+0"),
+            None,
+            self.accion_tema_oscuro,
         ])
         reproductor = vista.reproductor
         self._agregar_menu("&Pasos", [

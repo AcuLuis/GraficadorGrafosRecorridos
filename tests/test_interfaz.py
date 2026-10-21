@@ -9,10 +9,14 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 QtWidgets = pytest.importorskip("PyQt6.QtWidgets")
 
 from matplotlib.backend_bases import MouseButton, MouseEvent  # noqa: E402
+from matplotlib.colors import to_hex  # noqa: E402
+from PyQt6 import QtCore  # noqa: E402
+from PyQt6.QtGui import QPalette  # noqa: E402
 
 from ui import dialogos, panel_vista  # noqa: E402
 from ui.estilos import COLORES  # noqa: E402
-from ui.ventana_principal import MainWindow, instalar_traducciones  # noqa: E402
+from ui.tema import TEMAS  # noqa: E402
+from ui.ventana_principal import CLAVE_TEMA_OSCURO, MainWindow, instalar_traducciones  # noqa: E402
 
 ESQUINA_VACIA = (0.02, 0.98)
 
@@ -40,9 +44,14 @@ def avisos(monkeypatch):
     return mensajes
 
 
+def preferencias_temporales(carpeta):
+    """Preferencias en un archivo .ini temporal, para no tocar las del usuario."""
+    return QtCore.QSettings(str(carpeta / "preferencias.ini"), QtCore.QSettings.Format.IniFormat)
+
+
 @pytest.fixture
-def ventana(app, avisos):
-    ventana = MainWindow()
+def ventana(app, avisos, tmp_path):
+    ventana = MainWindow(preferencias_temporales(tmp_path))
     ventana.panel_vista.cargar_grafo_prueba()
     ventana.panel_vista.lienzo.draw()
     yield ventana
@@ -367,6 +376,7 @@ class TestAtajos:
         ("Reproducir / Pausar", "Ctrl+P"), ("Paso Anterior", "Ctrl+Left"), ("Paso Siguiente", "Ctrl+Right"),
         ("Primer Paso", "Ctrl+Home"), ("Último Paso", "Ctrl+End"),
         ("Acercar", "Ctrl++"), ("Alejar", "Ctrl+-"), ("Restablecer Vista", "Ctrl+0"),
+        ("Tema Oscuro", "Ctrl+Shift+D"),
         ("Grafo Aleatorio…", "Ctrl+G"), ("Importar Lista de Adyacencia…", "Ctrl+I"),
     ])
     def test_atajos_definidos(self, ventana, texto, atajo):
@@ -698,6 +708,48 @@ class TestZoom:
         vista.lienzo.alejar()
         clic(vista, (1.2, 0.5))
         assert vista.modelo.grafo.number_of_nodes() == 8
+
+
+def claridad_de_la_ventana(app):
+    return app.palette().color(QPalette.ColorRole.Window).lightness()
+
+
+class TestTema:
+    def test_activar_y_desactivar_desde_el_menu(self, app, ventana, vista):
+        accion(ventana, "Tema Oscuro").trigger()
+        try:
+            assert ventana.accion_tema_oscuro.isChecked()
+            assert claridad_de_la_ventana(app) < 100
+            assert to_hex(vista.lienzo.figure.get_facecolor()) == TEMAS["oscuro"]["fondo"]
+            assert ventana.configuracion.value(CLAVE_TEMA_OSCURO, type=bool)
+        finally:
+            accion(ventana, "Tema Oscuro").trigger()
+        assert not ventana.configuracion.value(CLAVE_TEMA_OSCURO, type=bool)
+        assert claridad_de_la_ventana(app) > 150
+        assert to_hex(vista.lienzo.figure.get_facecolor()) == "#ffffff"
+
+    def test_se_recuerda_al_abrir(self, app, avisos, tmp_path):
+        preferencias = preferencias_temporales(tmp_path)
+        preferencias.setValue(CLAVE_TEMA_OSCURO, True)
+        ventana = MainWindow(preferencias)
+        try:
+            assert ventana.accion_tema_oscuro.isChecked()
+            assert ventana.panel_vista.lienzo.tema is TEMAS["oscuro"]
+        finally:
+            ventana.aplicar_tema(False)
+            ventana.close()
+
+    def test_leyenda_con_colores_del_tema(self, ventana, vista):
+        vista.ejecutar_bfs(1)
+        ventana.aplicar_tema(True, guardar=False)
+        try:
+            estilos = [muestra.styleSheet() for muestra in vista.leyenda.findChildren(QtWidgets.QLabel)]
+            assert any(TEMAS["oscuro"]["colores"]["blue"] in estilo for estilo in estilos)
+        finally:
+            ventana.aplicar_tema(False, guardar=False)
+
+    def test_abrir_no_guarda_preferencias(self, ventana):
+        assert ventana.configuracion.allKeys() == []
 
 
 class TestExportar:
