@@ -111,6 +111,52 @@ def test_cargar_grafo_dirigido_sincroniza_el_tipo(vista, tmp_path, monkeypatch):
     assert vista.rb_dirigido.isChecked()
 
 
+class TestDeshacer:
+    def test_deshacer_y_rehacer_creacion_de_nodo(self, vista):
+        vista.lienzo.clic.emit(0.5, 0.5)
+        assert 9 in vista.modelo.grafo
+        assert vista.pila_deshacer.undoText() == "Crear nodo 9"
+        vista.pila_deshacer.undo()
+        assert 9 not in vista.modelo.grafo
+        vista.pila_deshacer.redo()
+        assert 9 in vista.modelo.grafo
+
+    def test_deshacer_eliminacion_restaura_aristas_y_pesos(self, vista):
+        antes = sorted(vista.modelo.grafo.edges(data=True))
+        vista.eliminar_nodo(4)
+        vista.pila_deshacer.undo()
+        assert sorted(vista.modelo.grafo.edges(data=True)) == antes
+
+    def test_deshacer_limpiar(self, vista):
+        vista.limpiar()
+        assert vista.modelo.grafo.number_of_nodes() == 0
+        vista.pila_deshacer.undo()
+        assert vista.modelo.grafo.number_of_edges() == 17
+
+    def test_algoritmo_se_recalcula_al_deshacer(self, vista):
+        vista.ejecutar_kruskal()
+        vista.eliminar_nodo(4)
+        assert len(aristas_azules(vista)) == 6
+        vista.pila_deshacer.undo()
+        assert len(aristas_azules(vista)) == 7
+        assert vista.lbl_algoritmo.text() == panel_vista.KRUSKAL
+
+    def test_error_no_queda_en_el_historial(self, vista, avisos):
+        cantidad = vista.pila_deshacer.count()
+        vista.agregar_arista(1, 99, 3)
+        assert avisos == ["El nodo 99 no se encuentra."]
+        assert vista.pila_deshacer.count() == cantidad
+
+    def test_deshacer_cambio_de_tipo(self, vista, monkeypatch):
+        monkeypatch.setattr(vista, "_confirmar_borrado", lambda: True)
+        vista.rb_dirigido.click()
+        assert vista.modelo.dirigido
+        vista.pila_deshacer.undo()
+        assert not vista.modelo.dirigido
+        assert vista.rb_no_dirigido.isChecked()
+        assert vista.modelo.grafo.number_of_edges() == 17
+
+
 def test_cambiar_tipo_pide_confirmacion(vista, monkeypatch):
     monkeypatch.setattr(vista, "_confirmar_borrado", lambda: False)
     vista.rb_dirigido.click()

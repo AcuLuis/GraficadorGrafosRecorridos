@@ -1,7 +1,7 @@
 import sys
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction
+from PyQt6.QtGui import QAction, QKeySequence
 from PyQt6.QtWidgets import QApplication, QDockWidget, QMainWindow
 
 from modelo import ModeloGrafo
@@ -40,6 +40,12 @@ class MainWindow(QMainWindow):
             ("Guardar Avance", vista.guardar_json),
             ("Cargar Avance", vista.cargar_json),
         ])
+        menu_editar = self.menuBar().addMenu("&Editar")
+        deshacer = vista.pila_deshacer.createUndoAction(self, "Deshacer")
+        deshacer.setShortcut(QKeySequence.StandardKey.Undo)
+        rehacer = vista.pila_deshacer.createRedoAction(self, "Rehacer")
+        rehacer.setShortcuts([QKeySequence("Ctrl+Y"), QKeySequence("Ctrl+Shift+Z")])
+        menu_editar.addActions([deshacer, rehacer])
         self._agregar_menu("&Grafos", [
             ("Grafo de Prueba", vista.cargar_grafo_prueba),
             ("Recorrido Seleccionado", vista.conservar_recorrido),

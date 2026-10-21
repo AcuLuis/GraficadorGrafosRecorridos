@@ -86,6 +86,16 @@ class ModeloGrafo:
             raise ValueError("Primero ejecuta un algoritmo para obtener un recorrido.")
         self.grafo.remove_edges_from(sobrantes)
 
+    # Historial
+
+    def instantanea(self):
+        """Copia independiente del estado actual, para poder deshacer cambios."""
+        return self.grafo.copy(), dict(self.posiciones), dict(self.colores)
+
+    def restaurar(self, instantanea):
+        grafo, posiciones, colores = instantanea
+        self.grafo, self.posiciones, self.colores = grafo.copy(), dict(posiciones), dict(colores)
+
     # Persistencia
 
     def a_dict(self):

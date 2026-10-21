@@ -1,11 +1,12 @@
 import math
 from pathlib import Path
 
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QUndoStack
 from PyQt6.QtWidgets import (QFileDialog, QFrame, QGroupBox, QHBoxLayout, QLabel, QMessageBox,
                              QPushButton, QRadioButton, QVBoxLayout, QWidget)
 
 import algoritmos
+from ui.comandos import ComandoModelo
 from ui.dialogos import pedir_arista, pedir_nodo
 from ui.lienzo import Lienzo
 
@@ -31,8 +32,9 @@ class PanelVista(QWidget):
         super().__init__(parent)
         self.modelo = modelo
         self.panel_info = panel_info
-        # (función, argumentos) del último algoritmo, para repetirlo si se elimina un nodo.
+        # (función, argumentos) del último algoritmo, para recalcularlo cuando cambia el grafo.
         self.ultimo_algoritmo = None
+        self.pila_deshacer = QUndoStack(self)
         self._construir_interfaz()
 
     def _construir_interfaz(self):
@@ -94,10 +96,40 @@ class PanelVista(QWidget):
 
     # Edición del grafo
 
+    def _modificar(self, descripcion, accion, reiniciar_resultado=False, prefijo_error=""):
+        """Aplica ``accion`` al modelo y la registra en la pila de deshacer.
+
+        Si la acción falla se muestra el error y el modelo queda como estaba.
+        """
+        antes = self.modelo.instantanea()
+        try:
+            accion()
+        except (OSError, ValueError) as error:
+            QMessageBox.warning(self, "Alerta", f"{prefijo_error}{error}")
+            return False
+        if reiniciar_resultado:
+            self._limpiar_resultado()
+        self.pila_deshacer.push(ComandoModelo(descripcion, self.modelo, antes, self.modelo.instantanea(),
+                                              self._grafo_modificado))
+        self._grafo_modificado()
+        return True
+
+    def _grafo_modificado(self):
+        """Actualiza la vista tras un cambio del modelo, recalculando el último algoritmo."""
+        self._sincronizar_tipo()
+        if self.ultimo_algoritmo and self.modelo.tiene_aristas():
+            ejecutar, argumentos = self.ultimo_algoritmo
+            if argumentos and argumentos[0] not in self.modelo.grafo:
+                argumentos = (next(iter(self.modelo.grafo.nodes)),)
+            ejecutar(*argumentos)
+            return
+        if not self.modelo.tiene_aristas():
+            self._limpiar_resultado()
+        self.lienzo.dibujar()
+
     def _al_hacer_clic(self, x, y):
         if self.rb_dibujar_nodo.isChecked():
-            self.modelo.agregar_nodo(x, y)
-            self.lienzo.dibujar()
+            self._modificar(f"Crear nodo {self.modelo.siguiente_id()}", lambda: self.modelo.agregar_nodo(x, y))
 
     def pedir_arista(self):
         valores = pedir_arista(self)
@@ -105,12 +137,8 @@ class PanelVista(QWidget):
             self.agregar_arista(*valores)
 
     def agregar_arista(self, origen, destino, peso):
-        try:
-            self.modelo.agregar_arista(origen, destino, peso)
-        except ValueError as error:
-            QMessageBox.warning(self, "Alerta", str(error))
-            return
-        self.lienzo.dibujar()
+        self._modificar(f"Agregar arista {origen}-{destino}",
+                        lambda: self.modelo.agregar_arista(origen, destino, peso))
 
     def pedir_nodo_a_eliminar(self):
         nodo = pedir_nodo("Eliminar Nodo", self)
@@ -118,25 +146,10 @@ class PanelVista(QWidget):
             self.eliminar_nodo(nodo)
 
     def eliminar_nodo(self, nodo):
-        try:
-            self.modelo.eliminar_nodo(nodo)
-        except ValueError as error:
-            QMessageBox.warning(self, "Error", str(error))
-            return
-        if not self.modelo.tiene_aristas():
-            self._limpiar_resultado()
-        elif self.ultimo_algoritmo:
-            ejecutar, argumentos = self.ultimo_algoritmo
-            if argumentos and argumentos[0] not in self.modelo.grafo:
-                argumentos = (next(iter(self.modelo.grafo.nodes)),)
-            ejecutar(*argumentos)
-            return
-        self.lienzo.dibujar()
+        self._modificar(f"Eliminar nodo {nodo}", lambda: self.modelo.eliminar_nodo(nodo))
 
     def limpiar(self):
-        self.modelo.limpiar()
-        self._limpiar_resultado()
-        self.lienzo.dibujar()
+        self._modificar("Limpiar grafo", self.modelo.limpiar, reiniciar_resultado=True)
 
     def cambiar_tipo_grafo(self):
         dirigido = self.rb_dirigido.isChecked()
@@ -145,9 +158,8 @@ class PanelVista(QWidget):
         if self.modelo.grafo.number_of_nodes() and not self._confirmar_borrado():
             self._sincronizar_tipo()
             return
-        self.modelo.cambiar_tipo(dirigido)
-        self._limpiar_resultado()
-        self.lienzo.dibujar()
+        self._modificar("Cambiar a grafo dirigido" if dirigido else "Cambiar a grafo no dirigido",
+                        lambda: self.modelo.cambiar_tipo(dirigido), reiniciar_resultado=True)
 
     def _confirmar_borrado(self):
         alerta = QMessageBox(QMessageBox.Icon.Warning, "Alerta",
@@ -216,14 +228,8 @@ class PanelVista(QWidget):
         self.ultimo_algoritmo = (repetir, argumentos)
 
     def conservar_recorrido(self):
-        if not self.modelo.tiene_aristas():
-            return
-        try:
-            self.modelo.conservar_aristas(COLOR_RECORRIDO)
-        except ValueError as error:
-            QMessageBox.warning(self, "Advertencia", str(error))
-            return
-        self.lienzo.dibujar()
+        if self.modelo.tiene_aristas():
+            self._modificar("Conservar recorrido", lambda: self.modelo.conservar_aristas(COLOR_RECORRIDO))
 
     # Archivos
 
@@ -247,24 +253,11 @@ class PanelVista(QWidget):
 
     def cargar_json(self):
         ruta, _ = QFileDialog.getOpenFileName(self, "Cargar Grafo", "", "JSON Files (*.json);;All Files (*)")
-        if not ruta:
-            return
-        try:
-            self.modelo.cargar_json(ruta)
-        except (OSError, ValueError) as error:
-            QMessageBox.critical(self, "Error", f"No se pudo cargar el grafo:\n{error}")
-            return
-        self._despues_de_cargar()
+        if ruta:
+            self._modificar("Cargar grafo", lambda: self.modelo.cargar_json(ruta), reiniciar_resultado=True,
+                            prefijo_error="No se pudo cargar el grafo:\n")
 
     def cargar_grafo_prueba(self):
-        try:
-            self.modelo.cargar_texto(CARPETA_DATOS / "Nodos.txt", CARPETA_DATOS / "Aristas.txt")
-        except (OSError, ValueError) as error:
-            QMessageBox.critical(self, "Error", f"No se pudo cargar el grafo de prueba:\n{error}")
-            return
-        self._despues_de_cargar()
-
-    def _despues_de_cargar(self):
-        self._sincronizar_tipo()
-        self._limpiar_resultado()
-        self.lienzo.dibujar()
+        self._modificar("Cargar grafo de prueba",
+                        lambda: self.modelo.cargar_texto(CARPETA_DATOS / "Nodos.txt", CARPETA_DATOS / "Aristas.txt"),
+                        reiniciar_resultado=True, prefijo_error="No se pudo cargar el grafo de prueba:\n")

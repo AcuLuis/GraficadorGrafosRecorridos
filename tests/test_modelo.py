@@ -87,6 +87,25 @@ class TestColores:
         assert modelo.grafo.number_of_edges() == 2
 
 
+class TestHistorial:
+    def test_restaurar_vuelve_al_estado_guardado(self, modelo):
+        antes = estado(modelo)
+        guardado = modelo.instantanea()
+        modelo.pintar_aristas([(1, 2)], "blue")
+        modelo.eliminar_nodo(3)
+        modelo.cambiar_tipo(dirigido=True)
+        modelo.restaurar(guardado)
+        assert estado(modelo) == antes
+
+    def test_instantanea_es_independiente(self, modelo):
+        guardado = modelo.instantanea()
+        modelo.restaurar(guardado)
+        modelo.eliminar_nodo(1)
+        modelo.restaurar(guardado)
+        assert 1 in modelo.grafo
+        assert modelo.grafo.has_edge(1, 2)
+
+
 class TestPersistencia:
     @pytest.mark.parametrize("dirigido", [False, True])
     def test_json_ida_y_vuelta(self, tmp_path, dirigido):
