@@ -1,0 +1,3 @@
+# Los scripts de inicio necesitan los finales de línea de su sistema, sin importar la configuración de git.
+*.bat text eol=crlf
+*.sh text eol=lf

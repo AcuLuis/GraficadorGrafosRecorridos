@@ -468,8 +468,11 @@ class PanelVista(QWidget):
         ruta, _ = QFileDialog.getOpenFileName(self, "Importar lista de adyacencia", str(CARPETA_DATOS),
                                               "Texto (*.txt);;Todos los archivos (*)")
         if ruta:
-            self._modificar("Importar lista de adyacencia", lambda: self.modelo.cargar_lista_adyacencia(ruta),
-                            reiniciar_resultado=True, prefijo_error="No se pudo importar la lista de adyacencia:\n")
+            self.cargar_lista_adyacencia(ruta)
+
+    def cargar_lista_adyacencia(self, ruta):
+        self._modificar("Importar lista de adyacencia", lambda: self.modelo.cargar_lista_adyacencia(ruta),
+                        reiniciar_resultado=True, prefijo_error="No se pudo importar la lista de adyacencia:\n")
 
     def exportar_lista_adyacencia(self):
         ruta, _ = QFileDialog.getSaveFileName(self, "Exportar lista de adyacencia", "", "Texto (*.txt)")
