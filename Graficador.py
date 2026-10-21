@@ -11,6 +11,7 @@ from collections import deque
 import heapq
 from DialogNodo import *
 import json
+import ast
 from pathlib import Path
 
 centralWidget = None
@@ -102,7 +103,10 @@ class Lienzo:
     def GuardarIMG(self):
         file_path, _ = QFileDialog.getSaveFileName(self.main_window, 'Guardar Imagen', '', 'PNG Files (*.png);;All Files (*)')
         if file_path:
-            self.fig.savefig(file_path, bbox_inches='tight', pad_inches=0.1)
+            try:
+                self.fig.savefig(file_path, bbox_inches='tight', pad_inches=0.1)
+            except (OSError, ValueError) as error:
+                QMessageBox.critical(self.main_window, "Error", f"No se pudo guardar la imagen:\n{error}")
     def guardarEnJSON(self):
         ruta, _ = QFileDialog.getSaveFileName(self.main_window, 'Guardar Grafo', '', 'JSON Files (*.json);;All Files (*)')
         if ruta:
@@ -113,29 +117,34 @@ class Lienzo:
                 "edge_colors": {str(k): v for k, v in self.edge_colors.items()},
                 "graph_type": "Directed" if isinstance(self.graph, nx.DiGraph) else "Undirected"
             }
-
-            with open(ruta, 'w') as json_file:
-                json.dump(data, json_file, indent=2)
+            try:
+                with open(ruta, 'w', encoding='utf-8') as json_file:
+                    json.dump(data, json_file, indent=2)
+            except OSError as error:
+                QMessageBox.critical(self.main_window, "Error", f"No se pudo guardar el grafo:\n{error}")
     def cargarJson(self):
         ruta, _ = QFileDialog.getOpenFileName(self.main_window, 'Cargar Grafo', '', 'JSON Files (*.json);;All Files (*)')
-        if ruta:
-            with open(ruta, 'r') as json_file:
+        if not ruta:
+            return
+        try:
+            with open(ruta, 'r', encoding='utf-8') as json_file:
                 data = json.load(json_file)
-                self.Limpiar()
-                nodes = data.get("nodes", [])
-                edges = data.get("edges", [])
-                pos = data.get("pos", {})
-                edge_colors = data.get("edge_colors", {})
-                graph_type = data.get("graph_type", "Undirected")
-                if graph_type == "Directed":
-                    self.graph = nx.DiGraph()
-                else:
-                    self.graph = nx.Graph()
-                self.graph.add_nodes_from(nodes)
-                self.graph.add_edges_from(edges)
-                self.pos = {eval(k): v for k, v in pos.items()}
-                self.edge_colors = {eval(k): v for k, v in edge_colors.items()}
-                self.DibujarGrafo()
+            graph_type = data.get("graph_type", "Undirected")
+            grafo = nx.DiGraph() if graph_type == "Directed" else nx.Graph()
+            grafo.add_nodes_from(data.get("nodes", []))
+            grafo.add_edges_from(data.get("edges", []))
+            pos = {ast.literal_eval(k): tuple(v) for k, v in data.get("pos", {}).items()}
+            edge_colors = {ast.literal_eval(k): v for k, v in data.get("edge_colors", {}).items()}
+            sin_posicion = [nodo for nodo in grafo.nodes if nodo not in pos]
+            if sin_posicion:
+                raise ValueError(f"Nodos sin posición: {sin_posicion}")
+        except (OSError, ValueError, SyntaxError, TypeError, AttributeError, nx.NetworkXError) as error:
+            QMessageBox.critical(self.main_window, "Error", f"No se pudo cargar el grafo:\n{error}")
+            return
+        self.graph = grafo
+        self.pos = pos
+        self.edge_colors = edge_colors
+        self.DibujarGrafo()
     def getNodos(self):
         return self.graph.nodes()
     def getAristas(self):
