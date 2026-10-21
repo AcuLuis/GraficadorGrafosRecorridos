@@ -8,6 +8,7 @@ from Arista import MiDialogo
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from Utilidades import Operaciones as op
 from collections import deque
+import heapq
 from DialogNodo import *
 import json
 from pathlib import Path
@@ -26,7 +27,6 @@ class Lienzo:
         self.main_window = main_window    
         self.graph = nx.Graph()
         self.edge_colors={}
-        self.edge_weights = {} 
         self.pos = {}
         self.fig = Figure()
         self.canvas = FigureCanvasQTAgg(self.fig)
@@ -46,7 +46,6 @@ class Lienzo:
         if posNodo1 in self.graph.nodes() and posNodo2 in self.graph.nodes():
             self.graph.add_edge(posNodo1, posNodo2,weight=peso)
             self.edge_colors[(posNodo1, posNodo2)] = "black"
-            self.edge_weights[(posNodo1, posNodo2)] = peso
             self.DibujarGrafo()
         else:
             if posNodo1 not in self.graph.nodes():
@@ -92,13 +91,9 @@ class Lienzo:
         self.ax.axis('off')
         self.rect = Rectangle((0, 0), 1, 1, linewidth=2, edgecolor='black', facecolor='none')
         self.ax.add_patch(self.rect)
-        if( not self.edge_colors and not self.edge_weights):
-             nx.draw(self.graph, pos=self.pos, with_labels=True, font_weight='bold', ax=self.ax)
-             nx.draw_networkx_edge_labels(self.graph, pos=self.pos, edge_labels=edge_labels, ax=self.ax)
-        else:
-            nx.draw(self.graph, pos=self.pos, with_labels=True, font_weight='bold', ax=self.ax,
-                edge_color=[self.edge_colors.get(edge, 'black') for edge in self.graph.edges()])
-            nx.draw_networkx_edge_labels(self.graph, pos=self.pos, edge_labels=edge_labels, ax=self.ax)
+        nx.draw(self.graph, pos=self.pos, with_labels=True, font_weight='bold', ax=self.ax,
+            edge_color=[self.edge_colors.get(edge, 'black') for edge in self.graph.edges()])
+        nx.draw_networkx_edge_labels(self.graph, pos=self.pos, edge_labels=edge_labels, ax=self.ax)
         self.rect.set_edgecolor(original_edgecolor)
         self.canvas.draw_idle()
     def GuardarIMG(self):
@@ -113,7 +108,6 @@ class Lienzo:
                 "edges": list(self.graph.edges(data=True)),
                 "pos": {str(k): v for k, v in self.pos.items()},
                 "edge_colors": {str(k): v for k, v in self.edge_colors.items()},
-                "edge_weights": {str(k): v for k, v in self.edge_weights.items()},
                 "graph_type": "Directed" if isinstance(self.graph, nx.DiGraph) else "Undirected"
             }
 
@@ -129,7 +123,6 @@ class Lienzo:
                 edges = data.get("edges", [])
                 pos = data.get("pos", {})
                 edge_colors = data.get("edge_colors", {})
-                edge_weights = data.get("edge_weights", {})
                 graph_type = data.get("graph_type", "Undirected")
                 if graph_type == "Directed":
                     self.graph = nx.DiGraph()
@@ -139,7 +132,6 @@ class Lienzo:
                 self.graph.add_edges_from(edges)
                 self.pos = {eval(k): v for k, v in pos.items()}
                 self.edge_colors = {eval(k): v for k, v in edge_colors.items()}
-                self.edge_weights = {eval(k): v for k, v in edge_weights.items()}
                 self.DibujarGrafo()
     def getNodos(self):
         return self.graph.nodes()
@@ -555,34 +547,34 @@ class PanelVista(QWidget):
         if self.hayAristas() and self.hayNodos():
             global verifica
             verifica = True
-            distancias = {node: float('inf') for node in self.lienzo.getNodos()}
+            grafo = self.lienzo.graph
+            distancias = {node: float('inf') for node in grafo.nodes()}
             distancias[inicio] = 0
             visitado = set()
             padre = {}
-            while len(visitado) != len(distancias):
-                min_nodo = None
-                min_distancia = float('inf')
-                for nodo in distancias:
-                    if nodo not in visitado and distancias[nodo] < min_distancia:
-                        min_nodo = nodo
-                        min_distancia = distancias[nodo]
-                if min_nodo is None:
-                    break
-                visitado.add(min_nodo)
-                vecinos = list(self.lienzo.graph.neighbors(min_nodo))
-                for veci in vecinos:
-                    arista = (min_nodo, veci)
-                    peso = self.lienzo.edge_weights.get(arista, 0)
-                    if distancias[min_nodo] + peso < distancias[veci]:
-                        distancias[veci] = distancias[min_nodo] + peso
-                        padre[veci] = min_nodo
+            cola = [(0, inicio)]
+            while cola:
+                distancia, nodo = heapq.heappop(cola)
+                if nodo in visitado:
+                    continue
+                visitado.add(nodo)
+                for veci in grafo.neighbors(nodo):
+                    nueva_distancia = distancia + grafo[nodo][veci].get('weight', 1)
+                    if nueva_distancia < distancias[veci]:
+                        distancias[veci] = nueva_distancia
+                        padre[veci] = nodo
+                        heapq.heappush(cola, (nueva_distancia, veci))
             content = "PASOS DIJKSTRA:\n"
-            for nodo_destino in padre:
-                nodo_origen = padre[nodo_destino]
-                arista = (nodo_origen, nodo_destino)
-                self.lienzo.setAristaColor([arista], "blue")
-                step = f"Va de nodo {nodo_origen} -> nodo {nodo_destino} (Peso: {self.lienzo.edge_weights.get(arista, 0)})\n"
-                content += step
+            aristas = []
+            for nodo_destino, nodo_origen in padre.items():
+                aristas.append((nodo_origen, nodo_destino))
+                peso = grafo[nodo_origen][nodo_destino].get('weight', 1)
+                content += f"Va de nodo {nodo_origen} -> nodo {nodo_destino} (Peso: {peso})\n"
+            content += f"\nDISTANCIAS DESDE {inicio}:\n"
+            for nodo in sorted(distancias):
+                distancia = distancias[nodo]
+                content += f"Nodo {nodo}: {distancia if distancia != float('inf') else 'inalcanzable'}\n"
+            self.lienzo.setAristaColor(aristas, "blue")
             panel.setContent(content)
             self.lblTipo.setText("DIJSKTRA - Camino más corto")
         else:
@@ -601,7 +593,7 @@ class PanelVista(QWidget):
                     nodo1, nodo2 = arista
                     if self.lienzo.graph.has_edge(nodo1, nodo2):
                         self.lienzo.graph.remove_edge(nodo1, nodo2)
-                for edge, peso in self.lienzo.edge_weights.items():
+                for edge in self.lienzo.graph.edges():
                     if edge not in aristas_azules:
                         self.lienzo.edge_colors[edge] = "black"
                 self.lienzo.DibujarGrafo()
