@@ -7,9 +7,11 @@ from matplotlib.figure import Figure
 from matplotlib.patches import Rectangle
 from PyQt6.QtCore import pyqtSignal
 
-COLOR_NODO = "#1f78b4"
-COLOR_NODO_RESALTADO = "#ff7f0e"
+from ui.estilos import COLORES, COLORES_DESTACADOS
+
 TAMANO_NODO = 300  # área del nodo en puntos², el valor por defecto de networkx
+ANCHO_ARISTA = 1.0
+ANCHO_ARISTA_DESTACADA = 2.5
 TOLERANCIA_PX = 5  # margen al detectar clics sobre nodos y aristas
 UMBRAL_ARRASTRE_PX = 3  # desplazamiento mínimo para que un clic cuente como arrastre
 
@@ -24,6 +26,9 @@ class Lienzo(FigureCanvasQTAgg):
     - ``nodo_movido(nodo, inicio, fin)``: fin de un arrastre. Mientras dura, la posición del
       nodo se actualiza en el modelo para verlo moverse.
     - ``menu_nodo(nodo)`` y ``menu_arista(origen, destino)``: clic derecho sobre un elemento.
+
+    Si ``estilo`` tiene un ``EstiloVista`` (por ejemplo, un paso de un algoritmo), los colores
+    salen de él; si es ``None``, las aristas usan los colores guardados en el modelo.
     """
 
     clic_vacio = pyqtSignal(float, float)
@@ -37,6 +42,7 @@ class Lienzo(FigureCanvasQTAgg):
         self.setParent(parent)
         self.modelo = modelo
         self.nodo_resaltado = None
+        self.estilo = None
         self._arrastre = None
         self.ejes = self.figure.add_subplot()
         self.figure.subplots_adjust(left=0.02, right=0.98, bottom=0.02, top=0.98)
@@ -53,12 +59,29 @@ class Lienzo(FigureCanvasQTAgg):
         self.ejes.set_ylim(0, 1)
         self.ejes.axis("off")
         self.ejes.add_patch(Rectangle((0, 0), 1, 1, linewidth=2, edgecolor="black", facecolor="none"))
+        aristas = list(grafo.edges)
+        colores_aristas = [self._color_arista(*arista) for arista in aristas]
+        discontinuas = self.estilo.discontinuas if self.estilo else set()
         nx.draw(grafo, pos=posiciones, with_labels=True, font_weight="bold", ax=self.ejes, node_size=TAMANO_NODO,
-                node_color=[COLOR_NODO_RESALTADO if nodo == self.nodo_resaltado else COLOR_NODO for nodo in grafo.nodes],
-                edge_color=[self.modelo.color_arista(origen, destino) for origen, destino in grafo.edges])
+                node_color=[self._color_nodo(nodo) for nodo in grafo.nodes],
+                edgelist=aristas, edge_color=colores_aristas,
+                width=[ANCHO_ARISTA_DESTACADA if color in COLORES_DESTACADOS else ANCHO_ARISTA for color in colores_aristas],
+                style=["dashed" if arista in discontinuas else "solid" for arista in aristas])
         nx.draw_networkx_edge_labels(grafo, pos=posiciones, edge_labels=nx.get_edge_attributes(grafo, "weight"),
                                      ax=self.ejes)
         self.draw_idle()
+
+    def _color_nodo(self, nodo):
+        if nodo == self.nodo_resaltado:
+            return COLORES["seleccionado"]
+        if self.estilo and nodo in self.estilo.nodos:
+            return self.estilo.nodos[nodo]
+        return COLORES["normal"]
+
+    def _color_arista(self, origen, destino):
+        if self.estilo:
+            return self.estilo.aristas.get((origen, destino), COLORES["arista"])
+        return self.modelo.color_arista(origen, destino)
 
     def guardar_imagen(self, ruta):
         self.figure.savefig(ruta, bbox_inches="tight", pad_inches=0.1)

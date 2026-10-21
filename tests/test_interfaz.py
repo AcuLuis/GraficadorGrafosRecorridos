@@ -9,6 +9,7 @@ QtWidgets = pytest.importorskip("PyQt6.QtWidgets")
 from matplotlib.backend_bases import MouseButton, MouseEvent  # noqa: E402
 
 from ui import panel_vista  # noqa: E402
+from ui.estilos import COLORES  # noqa: E402
 from ui.ventana_principal import MainWindow  # noqa: E402
 
 ESQUINA_VACIA = (0.02, 0.98)
@@ -86,16 +87,18 @@ def punto_medio(vista, origen, destino):
 
 class TestAlgoritmos:
     @pytest.mark.parametrize("ejecutar, nombre, titulo", [
-        (lambda vista: vista.ejecutar_bfs(1), panel_vista.BFS, "PASOS BFS:"),
-        (lambda vista: vista.ejecutar_dfs(1), panel_vista.DFS, "PASOS DFS:"),
-        (lambda vista: vista.ejecutar_kruskal(), panel_vista.KRUSKAL, "PASOS KRUSKAL:"),
-        (lambda vista: vista.ejecutar_dijkstra(1), panel_vista.DIJKSTRA, "PASOS DIJKSTRA:"),
+        (lambda vista: vista.ejecutar_bfs(1), panel_vista.BFS, f"{panel_vista.BFS} desde el nodo 1"),
+        (lambda vista: vista.ejecutar_dfs(1), panel_vista.DFS, f"{panel_vista.DFS} desde el nodo 1"),
+        (lambda vista: vista.ejecutar_kruskal(), panel_vista.KRUSKAL, panel_vista.KRUSKAL),
+        (lambda vista: vista.ejecutar_dijkstra(1), panel_vista.DIJKSTRA, f"{panel_vista.DIJKSTRA} desde el nodo 1"),
     ])
     def test_pintan_y_describen_el_resultado(self, vista, avisos, ejecutar, nombre, titulo):
         ejecutar(vista)
         assert len(aristas_azules(vista)) == 7
         assert vista.lbl_algoritmo.text() == nombre
+        assert vista.panel_info.titulo == titulo
         assert vista.panel_info.texto().startswith(titulo)
+        assert vista.panel_info.tabla_pasos.rowCount() == len(vista.pasos)
         assert avisos == []
 
     def test_colores_no_se_acumulan(self, vista):
@@ -196,7 +199,7 @@ class TestMenusContextuales:
 
     def test_algoritmo_desde_un_nodo(self, vista):
         self.disparar(vista.menu_nodo(3), "Dijkstra")
-        assert vista.panel_info.texto().count("DISTANCIAS DESDE 3") == 1
+        assert vista.panel_info.titulo == f"{panel_vista.DIJKSTRA} desde el nodo 3"
 
 
 class TestDeshacer:
@@ -317,7 +320,7 @@ class TestNodoInicial:
     def test_lista_con_los_nodos_existentes(self, ventana, vista, nodo_elegido):
         accion(ventana, panel_vista.BFS).trigger()
         assert nodo_elegido["opciones"] == [str(nodo) for nodo in vista.modelo.grafo.nodes]
-        assert vista.panel_info.texto().startswith("PASOS BFS:\nVa de nodo 3")
+        assert vista.panel_info.titulo == f"{panel_vista.BFS} desde el nodo 3"
 
     def test_sugiere_el_nodo_seleccionado(self, ventana, vista, nodo_elegido):
         vista.seleccionar(5)
@@ -348,6 +351,8 @@ class TestAtajos:
         ("Eliminar Nodo", "Del"), ("Limpiar Grafo", "Ctrl+L"),
         (panel_vista.BFS, "Ctrl+1"), (panel_vista.DFS, "Ctrl+2"),
         (panel_vista.KRUSKAL, "Ctrl+3"), (panel_vista.DIJKSTRA, "Ctrl+4"),
+        ("Reproducir / Pausar", "Ctrl+P"), ("Paso Anterior", "Ctrl+Left"), ("Paso Siguiente", "Ctrl+Right"),
+        ("Primer Paso", "Ctrl+Home"), ("Último Paso", "Ctrl+End"),
     ])
     def test_atajos_definidos(self, ventana, texto, atajo):
         assert accion(ventana, texto).shortcut().toString() == atajo
@@ -379,6 +384,106 @@ class TestAtajos:
         assert vista.seleccionado is None
         accion(ventana, "Modo Nodo").trigger()
         assert vista.rb_dibujar_nodo.isChecked()
+
+
+def colores_en_lienzo(vista):
+    """Color con el que el lienzo dibuja cada nodo y cada arista en este momento."""
+    lienzo = vista.lienzo
+    nodos = {nodo: lienzo._color_nodo(nodo) for nodo in vista.modelo.grafo.nodes}
+    aristas = {arista: lienzo._color_arista(*arista) for arista in vista.modelo.grafo.edges}
+    return nodos, aristas
+
+
+class TestAnimacion:
+    def test_muestra_el_ultimo_paso_al_ejecutar(self, vista):
+        vista.ejecutar_bfs(1)
+        assert vista.reproductor.total == len(vista.pasos)
+        assert vista.reproductor.indice == len(vista.pasos) - 1
+        _, aristas = colores_en_lienzo(vista)
+        assert list(aristas.values()).count(COLORES["recorrido"]) == 7
+
+    def test_primer_paso(self, vista):
+        vista.ejecutar_bfs(1)
+        vista.reproductor.primero()
+        nodos, aristas = colores_en_lienzo(vista)
+        assert nodos[1] == COLORES["espera"]
+        assert set(nodos.values()) == {COLORES["espera"], COLORES["normal"]}
+        assert set(aristas.values()) == {COLORES["arista"]}
+        assert vista.panel_info.tabla_pasos.currentRow() == 0
+
+    def test_paso_a_paso(self, vista):
+        vista.ejecutar_bfs(1)
+        vista.reproductor.primero()
+        vista.reproductor.siguiente()
+        vista.reproductor.siguiente()
+        nodos, aristas = colores_en_lienzo(vista)
+        assert nodos[1] == COLORES["actual"]
+        assert nodos[2] == COLORES["espera"]
+        assert aristas[(1, 2)] == COLORES["examinada"]
+        vista.reproductor.anterior()
+        assert vista.reproductor.indice == 1
+        assert vista.reproductor.lbl_paso.text() == f"Paso 2 de {len(vista.pasos)}"
+
+    def test_reproduccion_automatica(self, vista):
+        vista.ejecutar_dfs(1)
+        vista.reproductor.reproducir()
+        assert vista.reproductor.reproduciendo
+        assert vista.reproductor.indice == 0
+        while vista.reproductor.reproduciendo:
+            vista.reproductor._avanzar_automaticamente()
+        assert vista.reproductor.indice == len(vista.pasos) - 1
+
+    def test_velocidad(self, vista):
+        intervalo = vista.reproductor.temporizador.interval()
+        vista.reproductor.cmb_velocidad.setCurrentText("2x")
+        assert vista.reproductor.temporizador.interval() == intervalo // 2
+
+    def test_elegir_un_paso_en_la_tabla(self, vista):
+        vista.ejecutar_kruskal()
+        vista.panel_info.tabla_pasos.selectRow(3)
+        assert vista.reproductor.indice == 3
+
+    def test_kruskal_muestra_descartadas(self, vista):
+        vista.ejecutar_kruskal()
+        descartadas = vista.pasos[-1].descartadas
+        assert descartadas
+        _, aristas = colores_en_lienzo(vista)
+        for origen, destino in descartadas:
+            color = aristas.get((origen, destino)) or aristas.get((destino, origen))
+            assert color == COLORES["descartada"]
+        assert set(descartadas) <= vista.lienzo.estilo.discontinuas
+
+    def test_dijkstra_muestra_distancias(self, vista):
+        vista.ejecutar_dijkstra(1)
+        tabla = vista.panel_info.tabla_distancias
+        assert tabla.isVisibleTo(vista.panel_info)
+        assert tabla.rowCount() == 8
+        vista.reproductor.primero()
+        distancias = {tabla.item(fila, 0).text(): tabla.item(fila, 1).text() for fila in range(tabla.rowCount())}
+        assert distancias["1"] == "0"
+        assert distancias["6"] == "∞"
+        vista.ejecutar_bfs(1)
+        assert not tabla.isVisibleTo(vista.panel_info)
+
+    def test_leyenda_segun_el_algoritmo(self, vista, confirmar):
+        vista.ejecutar_bfs(1)
+        assert "En la cola" in vista.leyenda.entradas
+        vista.ejecutar_kruskal()
+        assert "Descartada (ciclo)" in vista.leyenda.entradas
+        # Cada entrada es una muestra de color y un texto; las de la leyenda anterior no deben quedar.
+        assert len(vista.leyenda.findChildren(QtWidgets.QLabel)) == 2 * len(vista.leyenda.entradas)
+        vista.limpiar()
+        assert vista.leyenda.entradas == []
+        assert not vista.reproductor.isEnabled()
+
+    def test_editar_el_grafo_conserva_el_paso(self, vista):
+        vista.ejecutar_bfs(1)
+        vista.reproductor.ir_a(3)
+        vista.eliminar_nodo(8)
+        assert vista.reproductor.indice == 3
+        vista.reproductor.ultimo()
+        vista.eliminar_nodo(7)
+        assert vista.reproductor.indice == vista.reproductor.total - 1
 
 
 class TestBarraDeEstado:

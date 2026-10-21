@@ -1,4 +1,3 @@
-import math
 from pathlib import Path
 
 from PyQt6.QtCore import pyqtSignal
@@ -9,7 +8,10 @@ from PyQt6.QtWidgets import (QFileDialog, QGroupBox, QHBoxLayout, QLabel, QMenu,
 import algoritmos
 from ui.comandos import ComandoModelo
 from ui.dialogos import pedir_arista, pedir_nodo, pedir_peso
+from ui.estilos import LEYENDAS, estilo_de_paso
+from ui.leyenda import Leyenda
 from ui.lienzo import Lienzo
+from ui.reproductor import Reproductor
 
 CARPETA_DATOS = Path(__file__).resolve().parent.parent / "datos"
 COLOR_RECORRIDO = "blue"
@@ -25,10 +27,6 @@ AYUDA_MODO_NODO = ("Clic en un espacio vacío: crear nodo · Arrastrar un nodo: 
                    "Clic en un nodo: seleccionarlo · Clic derecho: más opciones")
 AYUDA_ARISTA_ORIGEN = "Modo arista: haz clic en el nodo de origen."
 AYUDA_ARISTA_DESTINO = "Modo arista: origen en el nodo {nodo}. Haz clic en el nodo de destino (Esc cancela)."
-
-
-def texto_pasos(titulo, aristas):
-    return titulo + "\n" + "".join(f"Va de nodo {arista[0]} -> nodo {arista[1]}\n" for arista in aristas)
 
 
 class PanelVista(QWidget):
@@ -47,6 +45,7 @@ class PanelVista(QWidget):
         self.panel_info = panel_info
         # (función, argumentos) del último algoritmo, para recalcularlo cuando cambia el grafo.
         self.ultimo_algoritmo = None
+        self.pasos = []
         self.pila_deshacer = QUndoStack(self)
         self._construir_interfaz()
 
@@ -97,14 +96,21 @@ class PanelVista(QWidget):
         layout_cabecera.addLayout(fila_controles)
 
         self.lienzo = Lienzo(self.modelo)
+        self.leyenda = Leyenda()
+        self.reproductor = Reproductor()
         grupo_grafo = QGroupBox("Vista Grafo")
-        QVBoxLayout(grupo_grafo).addWidget(self.lienzo)
+        layout_grafo = QVBoxLayout(grupo_grafo)
+        layout_grafo.addWidget(self.lienzo, 1)
+        layout_grafo.addWidget(self.leyenda)
+        layout_grafo.addWidget(self.reproductor)
 
         layout = QVBoxLayout(self)
         layout.addWidget(cabecera)
         layout.addWidget(grupo_grafo, 1)
         self.setMinimumSize(ANCHO_MINIMO, ALTO_MINIMO)
 
+        self.reproductor.paso_cambiado.connect(self._mostrar_paso)
+        self.panel_info.paso_elegido.connect(self.reproductor.elegir)
         self.lienzo.clic_vacio.connect(self._al_hacer_clic_vacio)
         self.lienzo.clic_nodo.connect(self._al_hacer_clic_en_nodo)
         self.lienzo.nodo_movido.connect(self._al_mover_nodo)
@@ -223,7 +229,10 @@ class PanelVista(QWidget):
             ejecutar, argumentos = self.ultimo_algoritmo
             if argumentos and argumentos[0] not in self.modelo.grafo:
                 argumentos = (next(iter(self.modelo.grafo.nodes)),)
+            indice, en_el_ultimo = self.reproductor.indice, self.reproductor.indice == self.reproductor.total - 1
             ejecutar(*argumentos)
+            if not en_el_ultimo:
+                self.reproductor.ir_a(indice)
             return
         if not self.modelo.tiene_aristas():
             self._limpiar_resultado()
@@ -307,7 +316,11 @@ class PanelVista(QWidget):
 
     def _limpiar_resultado(self):
         self.ultimo_algoritmo = None
+        self.pasos = []
+        self.lienzo.estilo = None
         self.lbl_algoritmo.setText("")
+        self.leyenda.limpiar()
+        self.reproductor.limpiar()
         self.panel_info.limpiar()
 
     # Algoritmos
@@ -325,52 +338,50 @@ class PanelVista(QWidget):
             ejecutar(inicio)
 
     def ejecutar_bfs(self, inicio):
-        def calcular():
-            aristas = algoritmos.bfs(self.modelo.grafo, inicio)
-            return aristas, texto_pasos("PASOS BFS:", aristas)
-        self._ejecutar(BFS, calcular, self.ejecutar_bfs, inicio)
+        self._ejecutar(BFS, f"desde el nodo {inicio}", "bfs",
+                       lambda: algoritmos.bfs_pasos(self.modelo.grafo, inicio), self.ejecutar_bfs, inicio)
 
     def ejecutar_dfs(self, inicio):
-        def calcular():
-            aristas = algoritmos.dfs(self.modelo.grafo, inicio)
-            return aristas, texto_pasos("PASOS DFS:", aristas)
-        self._ejecutar(DFS, calcular, self.ejecutar_dfs, inicio)
+        self._ejecutar(DFS, f"desde el nodo {inicio}", "dfs",
+                       lambda: algoritmos.dfs_pasos(self.modelo.grafo, inicio), self.ejecutar_dfs, inicio)
 
     def ejecutar_kruskal(self):
-        def calcular():
-            aristas = algoritmos.kruskal(self.modelo.grafo)
-            peso_total = sum(peso for _, _, peso in aristas)
-            return aristas, texto_pasos("PASOS KRUSKAL:", aristas) + f"\nPeso total: {peso_total}\n"
-        self._ejecutar(KRUSKAL, calcular, self.ejecutar_kruskal)
+        self._ejecutar(KRUSKAL, "", "kruskal", lambda: algoritmos.kruskal_pasos(self.modelo.grafo),
+                       self.ejecutar_kruskal)
 
     def ejecutar_dijkstra(self, inicio):
-        def calcular():
-            distancias, aristas = algoritmos.dijkstra(self.modelo.grafo, inicio)
-            texto = "PASOS DIJKSTRA:\n"
-            for origen, destino, peso in aristas:
-                texto += f"Va de nodo {origen} -> nodo {destino} (Peso: {peso})\n"
-            texto += f"\nDISTANCIAS DESDE {inicio}:\n"
-            for nodo in sorted(distancias):
-                distancia = distancias[nodo]
-                texto += f"Nodo {nodo}: {distancia if distancia != math.inf else 'inalcanzable'}\n"
-            return aristas, texto
-        self._ejecutar(DIJKSTRA, calcular, self.ejecutar_dijkstra, inicio)
+        self._ejecutar(DIJKSTRA, f"desde el nodo {inicio}", "dijkstra",
+                       lambda: algoritmos.dijkstra_pasos(self.modelo.grafo, inicio), self.ejecutar_dijkstra, inicio)
 
-    def _ejecutar(self, nombre, calcular, repetir, *argumentos):
+    def _ejecutar(self, nombre, detalle, leyenda, calcular, repetir, *argumentos):
+        """Calcula los pasos del algoritmo, guarda el resultado en el modelo y muestra el último paso."""
         if not self.modelo.tiene_aristas():
             QMessageBox.warning(self, "Advertencia", "No hay nodo o no hay aristas.")
             return
         try:
-            aristas, texto = calcular()
+            pasos = calcular()
         except ValueError as error:
             QMessageBox.warning(self, "Advertencia", str(error))
             return
+        final = pasos[-1]
         self.modelo.reiniciar_colores()
-        self.modelo.pintar_aristas([arista[:2] for arista in aristas], COLOR_RECORRIDO)
-        self.lienzo.dibujar()
-        self.panel_info.mostrar(texto)
-        self.lbl_algoritmo.setText(nombre)
+        self.modelo.pintar_aristas(final.aristas, COLOR_RECORRIDO)
+        self.pasos = pasos
         self.ultimo_algoritmo = (repetir, argumentos)
+        self.lbl_algoritmo.setText(nombre)
+        self.leyenda.mostrar(LEYENDAS[leyenda])
+        self.panel_info.mostrar_resultado(f"{nombre} {detalle}".strip(), final.descripcion,
+                                          [paso.descripcion for paso in pasos],
+                                          con_distancias=final.distancias is not None)
+        self.reproductor.cargar(len(pasos))
+
+    def _mostrar_paso(self, indice):
+        if not self.pasos:
+            return
+        paso = self.pasos[indice]
+        self.lienzo.estilo = estilo_de_paso(paso, self.modelo.dirigido)
+        self.lienzo.dibujar()
+        self.panel_info.seleccionar_paso(indice, paso)
 
     # Archivos
 

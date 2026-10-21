@@ -8,7 +8,7 @@ from modelo import ModeloGrafo
 from ui.panel_informacion import PanelInformacion
 from ui.panel_vista import BFS, DFS, DIJKSTRA, KRUSKAL, PanelVista
 
-ANCHO_PANEL_LATERAL = 300
+ANCHO_PANEL_LATERAL = 340
 DURACION_AVISO_MS = 3000
 
 
@@ -29,7 +29,6 @@ class MainWindow(QMainWindow):
         dock = QDockWidget("Panel de Información", self)
         dock.setWidget(self.panel_info)
         dock.setMinimumWidth(ANCHO_PANEL_LATERAL)
-        dock.setMaximumWidth(ANCHO_PANEL_LATERAL)
         dock.setStyleSheet("QDockWidget::title { background: lightblue; }")
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, dock)
 
@@ -69,6 +68,14 @@ class MainWindow(QMainWindow):
             (DFS, lambda *_: vista.pedir_inicio_y_ejecutar(vista.ejecutar_dfs), "Ctrl+2"),
             (KRUSKAL, vista.ejecutar_kruskal, "Ctrl+3"),
             (DIJKSTRA, lambda *_: vista.pedir_inicio_y_ejecutar(vista.ejecutar_dijkstra), "Ctrl+4"),
+        ])
+        reproductor = vista.reproductor
+        self._agregar_menu("&Pasos", [
+            ("Reproducir / Pausar", reproductor.alternar_reproduccion, "Ctrl+P"),
+            ("Paso Anterior", reproductor.anterior, "Ctrl+Left"),
+            ("Paso Siguiente", reproductor.siguiente, "Ctrl+Right"),
+            ("Primer Paso", reproductor.primero, "Ctrl+Home"),
+            ("Último Paso", reproductor.ultimo, "Ctrl+End"),
         ])
 
     def _agregar_menu(self, titulo, elementos):
