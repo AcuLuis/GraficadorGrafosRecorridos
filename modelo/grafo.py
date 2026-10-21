@@ -45,7 +45,13 @@ class ModeloGrafo:
         self.posiciones[nodo] = (x, y)
         return nodo
 
+    def mover_nodo(self, nodo, x, y):
+        """Cambia la posición del nodo, limitándola al área de dibujo (0 a 1)."""
+        self._validar_nodo(nodo)
+        self.posiciones[nodo] = (min(max(x, 0.0), 1.0), min(max(y, 0.0), 1.0))
+
     def agregar_arista(self, origen, destino, peso=1):
+        """Agrega la arista, o actualiza su peso si ya existe."""
         if origen == destino:
             raise ValueError("Una arista debe unir dos nodos distintos.")
         faltantes = [nodo for nodo in (origen, destino) if nodo not in self.grafo]
@@ -53,14 +59,38 @@ class ModeloGrafo:
             raise ValueError("Los nodos no se encuentran.")
         if faltantes:
             raise ValueError(f"El nodo {faltantes[0]} no se encuentra.")
+        _validar_peso(peso)
         self.grafo.add_edge(origen, destino, weight=peso)
 
+    def peso(self, origen, destino):
+        self._validar_arista(origen, destino)
+        return self.grafo[origen][destino].get("weight", 1)
+
+    def cambiar_peso(self, origen, destino, peso):
+        self._validar_arista(origen, destino)
+        _validar_peso(peso)
+        self.grafo[origen][destino]["weight"] = peso
+
+    def eliminar_arista(self, origen, destino):
+        self._validar_arista(origen, destino)
+        self.grafo.remove_edge(origen, destino)
+        self.colores.pop((origen, destino), None)
+        if not self.dirigido:
+            self.colores.pop((destino, origen), None)
+
     def eliminar_nodo(self, nodo):
-        if nodo not in self.grafo:
-            raise ValueError("El nodo no existe en el grafo.")
+        self._validar_nodo(nodo)
         self.grafo.remove_node(nodo)
         self.posiciones.pop(nodo, None)
         self.colores = {arista: color for arista, color in self.colores.items() if nodo not in arista}
+
+    def _validar_nodo(self, nodo):
+        if nodo not in self.grafo:
+            raise ValueError("El nodo no existe en el grafo.")
+
+    def _validar_arista(self, origen, destino):
+        if not self.grafo.has_edge(origen, destino):
+            raise ValueError(f"No existe la arista {origen}-{destino}.")
 
     # Colores
 
@@ -149,6 +179,11 @@ class ModeloGrafo:
 
     def _reemplazar(self, otro):
         self.grafo, self.posiciones, self.colores = otro.grafo, otro.posiciones, otro.colores
+
+
+def _validar_peso(peso):
+    if peso < 0:
+        raise ValueError("El peso debe ser un entero mayor o igual a 0.")
 
 
 def _leer_tuplas(ruta):

@@ -2,7 +2,7 @@ import sys
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction, QKeySequence
-from PyQt6.QtWidgets import QApplication, QDockWidget, QMainWindow
+from PyQt6.QtWidgets import QApplication, QDockWidget, QLabel, QMainWindow
 
 from modelo import ModeloGrafo
 from ui.dialogos import pedir_nodo
@@ -10,6 +10,7 @@ from ui.panel_informacion import PanelInformacion
 from ui.panel_vista import BFS, DFS, DIJKSTRA, KRUSKAL, PanelVista
 
 ANCHO_PANEL_LATERAL = 300
+DURACION_AVISO_MS = 3000
 
 
 class MainWindow(QMainWindow):
@@ -23,7 +24,14 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.panel_vista)
         self._crear_panel_lateral()
         self._crear_menus()
-        self.statusBar()
+        self._crear_barra_de_estado()
+
+    def _crear_barra_de_estado(self):
+        self.etiqueta_ayuda = QLabel()
+        self.statusBar().addWidget(self.etiqueta_ayuda, 1)
+        self.panel_vista.ayuda.connect(self.etiqueta_ayuda.setText)
+        self.panel_vista.notificacion.connect(lambda texto: self.statusBar().showMessage(texto, DURACION_AVISO_MS))
+        self.panel_vista.actualizar_ayuda()
 
     def _crear_panel_lateral(self):
         dock = QDockWidget("Panel de Información", self)

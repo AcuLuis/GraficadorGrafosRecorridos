@@ -6,8 +6,12 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 QtWidgets = pytest.importorskip("PyQt6.QtWidgets")
 
+from matplotlib.backend_bases import MouseButton, MouseEvent  # noqa: E402
+
 from ui import panel_vista  # noqa: E402
 from ui.ventana_principal import MainWindow  # noqa: E402
+
+ESQUINA_VACIA = (0.02, 0.98)
 
 
 @pytest.fixture(scope="module")
@@ -25,97 +29,180 @@ def avisos(monkeypatch):
 
 
 @pytest.fixture
-def vista(app, avisos):
+def ventana(app, avisos):
     ventana = MainWindow()
     ventana.panel_vista.cargar_grafo_prueba()
-    yield ventana.panel_vista
+    ventana.panel_vista.lienzo.draw()
+    yield ventana
     ventana.close()
     ventana.deleteLater()
+
+
+@pytest.fixture
+def vista(ventana):
+    return ventana.panel_vista
+
+
+@pytest.fixture
+def confirmar(vista, monkeypatch):
+    """Responde automáticamente a las confirmaciones; por defecto, que sí."""
+    respuesta = {"valor": True}
+    monkeypatch.setattr(vista, "_confirmar", lambda _mensaje: respuesta["valor"])
+    return respuesta
+
+
+@pytest.fixture
+def peso_ingresado(monkeypatch):
+    """Valor que devolverá el diálogo de peso; ``None`` simula cancelar."""
+    respuesta = {"valor": 4}
+    monkeypatch.setattr(QtWidgets.QInputDialog, "getInt", staticmethod(
+        lambda *a, **k: (respuesta["valor"] or 0, respuesta["valor"] is not None)))
+    return respuesta
 
 
 def aristas_azules(vista):
     return [arista for arista in vista.modelo.grafo.edges if vista.modelo.color_arista(*arista) == "blue"]
 
 
-@pytest.mark.parametrize("ejecutar, nombre, titulo", [
-    (lambda vista: vista.ejecutar_bfs(1), panel_vista.BFS, "PASOS BFS:"),
-    (lambda vista: vista.ejecutar_dfs(1), panel_vista.DFS, "PASOS DFS:"),
-    (lambda vista: vista.ejecutar_kruskal(), panel_vista.KRUSKAL, "PASOS KRUSKAL:"),
-    (lambda vista: vista.ejecutar_dijkstra(1), panel_vista.DIJKSTRA, "PASOS DIJKSTRA:"),
-])
-def test_algoritmos_pintan_y_describen_el_resultado(vista, avisos, ejecutar, nombre, titulo):
-    ejecutar(vista)
-    assert len(aristas_azules(vista)) == 7
-    assert vista.lbl_algoritmo.text() == nombre
-    assert vista.panel_info.texto().startswith(titulo)
-    assert avisos == []
+def mouse(vista, nombre, punto, boton=MouseButton.LEFT):
+    lienzo = vista.lienzo
+    x, y = lienzo.ejes.transData.transform(punto)
+    lienzo.callbacks.process(nombre, MouseEvent(nombre, lienzo, x, y, button=boton))
 
 
-def test_colores_no_se_acumulan_entre_algoritmos(vista):
-    vista.ejecutar_bfs(1)
-    vista.ejecutar_dfs(1)
-    vista.ejecutar_kruskal()
-    assert len(aristas_azules(vista)) == 7
+def clic(vista, punto, boton=MouseButton.LEFT):
+    mouse(vista, "button_press_event", punto, boton)
+    mouse(vista, "button_release_event", punto, boton)
 
 
-def test_nodo_inicial_inexistente(vista, avisos):
-    vista.ejecutar_dijkstra(99)
-    assert avisos == ["El nodo 99 no existe en el grafo."]
-    assert vista.lbl_algoritmo.text() == ""
+def posicion(vista, nodo):
+    return vista.modelo.posiciones[nodo]
 
 
-def test_clic_agrega_nodo_solo_en_modo_nodo(vista):
-    vista.lienzo.clic.emit(0.5, 0.5)
-    assert 9 in vista.modelo.grafo
-    vista.rb_dibujar_arista.setChecked(True)
-    assert vista.btn_ingresar_arista.isEnabled()
-    vista.lienzo.clic.emit(0.6, 0.6)
-    assert 10 not in vista.modelo.grafo
+def punto_medio(vista, origen, destino):
+    (x1, y1), (x2, y2) = posicion(vista, origen), posicion(vista, destino)
+    return (x1 + x2) / 2, (y1 + y2) / 2
 
 
-def test_eliminar_nodo_repite_el_ultimo_algoritmo(vista):
-    vista.ejecutar_bfs(1)
-    vista.eliminar_nodo(2)
-    assert vista.lbl_algoritmo.text() == panel_vista.BFS
-    assert len(aristas_azules(vista)) == 6
+class TestAlgoritmos:
+    @pytest.mark.parametrize("ejecutar, nombre, titulo", [
+        (lambda vista: vista.ejecutar_bfs(1), panel_vista.BFS, "PASOS BFS:"),
+        (lambda vista: vista.ejecutar_dfs(1), panel_vista.DFS, "PASOS DFS:"),
+        (lambda vista: vista.ejecutar_kruskal(), panel_vista.KRUSKAL, "PASOS KRUSKAL:"),
+        (lambda vista: vista.ejecutar_dijkstra(1), panel_vista.DIJKSTRA, "PASOS DIJKSTRA:"),
+    ])
+    def test_pintan_y_describen_el_resultado(self, vista, avisos, ejecutar, nombre, titulo):
+        ejecutar(vista)
+        assert len(aristas_azules(vista)) == 7
+        assert vista.lbl_algoritmo.text() == nombre
+        assert vista.panel_info.texto().startswith(titulo)
+        assert avisos == []
+
+    def test_colores_no_se_acumulan(self, vista):
+        vista.ejecutar_bfs(1)
+        vista.ejecutar_dfs(1)
+        vista.ejecutar_kruskal()
+        assert len(aristas_azules(vista)) == 7
+
+    def test_nodo_inicial_inexistente(self, vista, avisos):
+        vista.ejecutar_dijkstra(99)
+        assert avisos == ["El nodo 99 no existe en el grafo."]
+        assert vista.lbl_algoritmo.text() == ""
+
+    def test_se_recalcula_al_eliminar_un_nodo(self, vista):
+        vista.ejecutar_bfs(1)
+        vista.eliminar_nodo(2)
+        assert vista.lbl_algoritmo.text() == panel_vista.BFS
+        assert len(aristas_azules(vista)) == 6
 
 
-def test_recorrido_seleccionado(vista, avisos):
-    vista.conservar_recorrido()
-    assert avisos == ["Primero ejecuta un algoritmo para obtener un recorrido."]
-    vista.ejecutar_kruskal()
-    vista.conservar_recorrido()
-    assert vista.modelo.grafo.number_of_edges() == 7
+class TestLienzo:
+    def test_detecta_nodos_y_aristas(self, vista):
+        lienzo = vista.lienzo
+        x, y = lienzo.ejes.transData.transform(posicion(vista, 3))
+        assert lienzo.nodo_en(x + 3, y - 3) == 3
+        x, y = lienzo.ejes.transData.transform(punto_medio(vista, 1, 7))
+        assert set(lienzo.arista_en(x, y)) == {1, 7}
+        x, y = lienzo.ejes.transData.transform(ESQUINA_VACIA)
+        assert lienzo.nodo_en(x, y) is None and lienzo.arista_en(x, y) is None
+
+    def test_clic_en_vacio_crea_nodo_solo_en_modo_nodo(self, vista):
+        clic(vista, ESQUINA_VACIA)
+        assert 9 in vista.modelo.grafo
+        assert vista.pila_deshacer.undoText() == "Crear nodo 9"
+        vista.rb_dibujar_arista.setChecked(True)
+        clic(vista, (0.5, 0.02))
+        assert 10 not in vista.modelo.grafo
+
+    def test_clic_en_nodo_lo_selecciona(self, vista):
+        clic(vista, posicion(vista, 3))
+        assert vista.seleccionado == 3
+        assert vista.modelo.grafo.number_of_nodes() == 8
+        clic(vista, posicion(vista, 3))
+        assert vista.seleccionado is None
+
+    def test_arrastrar_nodo_y_deshacer(self, vista):
+        inicio = posicion(vista, 1)
+        mouse(vista, "button_press_event", inicio)
+        mouse(vista, "motion_notify_event", (0.3, 0.3))
+        mouse(vista, "motion_notify_event", (0.5, 0.1))
+        mouse(vista, "button_release_event", (0.5, 0.1))
+        assert posicion(vista, 1) == pytest.approx((0.5, 0.1))
+        assert vista.seleccionado is None
+        assert vista.pila_deshacer.undoText() == "Mover nodo 1"
+        vista.pila_deshacer.undo()
+        assert posicion(vista, 1) == pytest.approx(inicio)
+
+    def test_crear_arista_con_clics(self, vista, peso_ingresado):
+        vista.rb_dibujar_arista.setChecked(True)
+        clic(vista, posicion(vista, 1))
+        assert vista.seleccionado == 1
+        clic(vista, posicion(vista, 6))
+        assert vista.modelo.peso(1, 6) == 4
+        assert vista.seleccionado is None
+        vista.pila_deshacer.undo()
+        assert not vista.modelo.grafo.has_edge(1, 6)
+
+    def test_cancelar_el_peso_no_crea_arista(self, vista, peso_ingresado):
+        peso_ingresado["valor"] = None
+        vista.rb_dibujar_arista.setChecked(True)
+        clic(vista, posicion(vista, 1))
+        clic(vista, posicion(vista, 6))
+        assert not vista.modelo.grafo.has_edge(1, 6)
+
+    def test_clic_derecho_abre_el_menu_del_elemento(self, vista, monkeypatch):
+        abiertos = []
+        monkeypatch.setattr(QtWidgets.QMenu, "exec",
+                            lambda menu, *a: abiertos.append([accion.text() for accion in menu.actions()]))
+        clic(vista, posicion(vista, 5), MouseButton.RIGHT)
+        clic(vista, punto_medio(vista, 1, 7), MouseButton.RIGHT)
+        assert abiertos[0][0] == "Eliminar nodo 5"
+        assert abiertos[1][0].startswith("Editar peso de 1 - 7") or abiertos[1][0].startswith("Editar peso de 7 - 1")
 
 
-def test_cargar_json_invalido_conserva_el_grafo(vista, avisos, tmp_path, monkeypatch):
-    ruta = tmp_path / "roto.json"
-    ruta.write_text("{no es json", encoding="utf-8")
-    monkeypatch.setattr(QtWidgets.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: (str(ruta), "")))
-    vista.cargar_json()
-    assert avisos and avisos[0].startswith("No se pudo cargar el grafo")
-    assert vista.modelo.grafo.number_of_edges() == 17
+class TestMenusContextuales:
+    @staticmethod
+    def disparar(menu, inicio_texto):
+        next(accion for accion in menu.actions() if accion.text().startswith(inicio_texto)).trigger()
 
+    def test_editar_peso(self, vista, peso_ingresado):
+        peso_ingresado["valor"] = 8
+        self.disparar(vista.menu_arista(1, 2), "Editar peso")
+        assert vista.modelo.peso(1, 2) == 8
 
-def test_cargar_grafo_dirigido_sincroniza_el_tipo(vista, tmp_path, monkeypatch):
-    vista.modelo.cambiar_tipo(dirigido=True)
-    vista.modelo.agregar_nodo(0.2, 0.2)
-    vista.modelo.agregar_nodo(0.8, 0.8)
-    vista.modelo.agregar_arista(1, 2, 3)
-    ruta = tmp_path / "dirigido.json"
-    vista.modelo.guardar_json(ruta)
-    vista.modelo.cambiar_tipo(dirigido=False)
-    monkeypatch.setattr(QtWidgets.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: (str(ruta), "")))
-    vista.cargar_json()
-    assert vista.modelo.dirigido
-    assert vista.rb_dirigido.isChecked()
+    def test_eliminar_arista(self, vista):
+        self.disparar(vista.menu_arista(1, 2), "Eliminar arista")
+        assert not vista.modelo.grafo.has_edge(1, 2)
+
+    def test_algoritmo_desde_un_nodo(self, vista):
+        self.disparar(vista.menu_nodo(3), "Dijkstra")
+        assert vista.panel_info.texto().count("DISTANCIAS DESDE 3") == 1
 
 
 class TestDeshacer:
     def test_deshacer_y_rehacer_creacion_de_nodo(self, vista):
-        vista.lienzo.clic.emit(0.5, 0.5)
+        vista.lienzo.clic_vacio.emit(0.5, 0.5)
         assert 9 in vista.modelo.grafo
-        assert vista.pila_deshacer.undoText() == "Crear nodo 9"
         vista.pila_deshacer.undo()
         assert 9 not in vista.modelo.grafo
         vista.pila_deshacer.redo()
@@ -127,7 +214,7 @@ class TestDeshacer:
         vista.pila_deshacer.undo()
         assert sorted(vista.modelo.grafo.edges(data=True)) == antes
 
-    def test_deshacer_limpiar(self, vista):
+    def test_deshacer_limpiar(self, vista, confirmar):
         vista.limpiar()
         assert vista.modelo.grafo.number_of_nodes() == 0
         vista.pila_deshacer.undo()
@@ -147,8 +234,7 @@ class TestDeshacer:
         assert avisos == ["El nodo 99 no se encuentra."]
         assert vista.pila_deshacer.count() == cantidad
 
-    def test_deshacer_cambio_de_tipo(self, vista, monkeypatch):
-        monkeypatch.setattr(vista, "_confirmar_borrado", lambda: True)
+    def test_deshacer_cambio_de_tipo(self, vista, confirmar):
         vista.rb_dirigido.click()
         assert vista.modelo.dirigido
         vista.pila_deshacer.undo()
@@ -157,12 +243,69 @@ class TestDeshacer:
         assert vista.modelo.grafo.number_of_edges() == 17
 
 
-def test_cambiar_tipo_pide_confirmacion(vista, monkeypatch):
-    monkeypatch.setattr(vista, "_confirmar_borrado", lambda: False)
-    vista.rb_dirigido.click()
-    assert not vista.modelo.dirigido
-    assert vista.rb_no_dirigido.isChecked()
-    monkeypatch.setattr(vista, "_confirmar_borrado", lambda: True)
-    vista.rb_dirigido.click()
-    assert vista.modelo.dirigido
-    assert vista.modelo.grafo.number_of_nodes() == 0
+class TestConfirmaciones:
+    def test_limpiar_cancelado(self, vista, confirmar):
+        confirmar["valor"] = False
+        vista.limpiar()
+        assert vista.modelo.grafo.number_of_nodes() == 8
+
+    def test_cambiar_tipo_cancelado(self, vista, confirmar):
+        confirmar["valor"] = False
+        vista.rb_dirigido.click()
+        assert not vista.modelo.dirigido
+        assert vista.rb_no_dirigido.isChecked()
+
+    def test_cambiar_tipo_confirmado(self, vista, confirmar):
+        vista.rb_dirigido.click()
+        assert vista.modelo.dirigido
+        assert vista.modelo.grafo.number_of_nodes() == 0
+
+    def test_recorrido_seleccionado(self, vista, avisos, confirmar):
+        vista.conservar_recorrido()
+        assert avisos == ["Primero ejecuta un algoritmo para obtener un recorrido."]
+        vista.ejecutar_kruskal()
+        confirmar["valor"] = False
+        vista.conservar_recorrido()
+        assert vista.modelo.grafo.number_of_edges() == 17
+        confirmar["valor"] = True
+        vista.conservar_recorrido()
+        assert vista.modelo.grafo.number_of_edges() == 7
+
+
+class TestArchivos:
+    def test_cargar_json_invalido_conserva_el_grafo(self, vista, avisos, tmp_path, monkeypatch):
+        ruta = tmp_path / "roto.json"
+        ruta.write_text("{no es json", encoding="utf-8")
+        monkeypatch.setattr(QtWidgets.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: (str(ruta), "")))
+        vista.cargar_json()
+        assert avisos and avisos[0].startswith("No se pudo cargar el grafo")
+        assert vista.modelo.grafo.number_of_edges() == 17
+
+    def test_cargar_grafo_dirigido_sincroniza_el_tipo(self, vista, tmp_path, monkeypatch):
+        vista.modelo.cambiar_tipo(dirigido=True)
+        vista.modelo.agregar_nodo(0.2, 0.2)
+        vista.modelo.agregar_nodo(0.8, 0.8)
+        vista.modelo.agregar_arista(1, 2, 3)
+        ruta = tmp_path / "dirigido.json"
+        vista.modelo.guardar_json(ruta)
+        vista.modelo.cambiar_tipo(dirigido=False)
+        monkeypatch.setattr(QtWidgets.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: (str(ruta), "")))
+        vista.cargar_json()
+        assert vista.modelo.dirigido
+        assert vista.rb_dirigido.isChecked()
+
+
+class TestBarraDeEstado:
+    def test_selector_de_tipo_visible(self, vista):
+        assert vista.grupo_tipo.isVisibleTo(vista)
+
+    def test_ayuda_segun_el_modo(self, ventana, vista):
+        assert ventana.etiqueta_ayuda.text() == panel_vista.AYUDA_MODO_NODO
+        vista.rb_dibujar_arista.setChecked(True)
+        assert ventana.etiqueta_ayuda.text() == panel_vista.AYUDA_ARISTA_ORIGEN
+        clic(vista, posicion(vista, 2))
+        assert ventana.etiqueta_ayuda.text() == panel_vista.AYUDA_ARISTA_DESTINO.format(nodo=2)
+
+    def test_aviso_tras_cada_cambio(self, ventana, vista):
+        vista.eliminar_nodo(8)
+        assert ventana.statusBar().currentMessage() == "Eliminar nodo 8"

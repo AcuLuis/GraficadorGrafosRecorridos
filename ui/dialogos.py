@@ -1,5 +1,5 @@
 from PyQt6.QtGui import QIntValidator
-from PyQt6.QtWidgets import QDialog, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton
+from PyQt6.QtWidgets import QDialog, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMessageBox, QPushButton
 
 VALOR_MAXIMO = 999999
 
@@ -63,6 +63,12 @@ def pedir_arista(parent=None):
     if dialogo.exec() == QDialog.DialogCode.Accepted:
         return tuple(dialogo.valores)
     return None
+
+
+def pedir_peso(parent, etiqueta, valor=1):
+    """Devuelve el peso ingresado (entero mayor o igual a 0) o ``None`` si se cancela."""
+    peso, aceptado = QInputDialog.getInt(parent, "Peso de la arista", etiqueta, valor, 0, VALOR_MAXIMO)
+    return peso if aceptado else None
 
 
 def pedir_nodo(titulo, parent=None):

@@ -1,30 +1,49 @@
+import math
+
 import networkx as nx
+from matplotlib.backend_bases import MouseButton
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 from matplotlib.patches import Rectangle
 from PyQt6.QtCore import pyqtSignal
 
+COLOR_NODO = "#1f78b4"
+COLOR_NODO_RESALTADO = "#ff7f0e"
+TAMANO_NODO = 300  # área del nodo en puntos², el valor por defecto de networkx
+TOLERANCIA_PX = 5  # margen al detectar clics sobre nodos y aristas
+UMBRAL_ARRASTRE_PX = 3  # desplazamiento mínimo para que un clic cuente como arrastre
+
 
 class Lienzo(FigureCanvasQTAgg):
-    """Dibuja un ``ModeloGrafo`` con matplotlib.
+    """Dibuja un ``ModeloGrafo`` con matplotlib y traduce el mouse en acciones sobre nodos y aristas.
 
-    Emite ``clic(x, y)`` con las coordenadas del área de dibujo (entre 0 y 1)
-    cuando el usuario hace clic dentro de ella.
+    Señales:
+
+    - ``clic_vacio(x, y)``: clic izquierdo fuera de los nodos, en coordenadas del área (0 a 1).
+    - ``clic_nodo(nodo)``: clic izquierdo sobre un nodo, sin arrastrarlo.
+    - ``nodo_movido(nodo, inicio, fin)``: fin de un arrastre. Mientras dura, la posición del
+      nodo se actualiza en el modelo para verlo moverse.
+    - ``menu_nodo(nodo)`` y ``menu_arista(origen, destino)``: clic derecho sobre un elemento.
     """
 
-    clic = pyqtSignal(float, float)
+    clic_vacio = pyqtSignal(float, float)
+    clic_nodo = pyqtSignal(object)
+    nodo_movido = pyqtSignal(object, object, object)
+    menu_nodo = pyqtSignal(object)
+    menu_arista = pyqtSignal(object, object)
 
     def __init__(self, modelo, parent=None):
         super().__init__(Figure())
         self.setParent(parent)
         self.modelo = modelo
+        self.nodo_resaltado = None
+        self._arrastre = None
         self.ejes = self.figure.add_subplot()
+        self.figure.subplots_adjust(left=0.02, right=0.98, bottom=0.02, top=0.98)
         self.mpl_connect("button_press_event", self._al_presionar)
+        self.mpl_connect("motion_notify_event", self._al_mover)
+        self.mpl_connect("button_release_event", self._al_soltar)
         self.dibujar()
-
-    def _al_presionar(self, evento):
-        if evento.xdata is not None and evento.ydata is not None:
-            self.clic.emit(evento.xdata, evento.ydata)
 
     def dibujar(self):
         grafo = self.modelo.grafo
@@ -34,7 +53,8 @@ class Lienzo(FigureCanvasQTAgg):
         self.ejes.set_ylim(0, 1)
         self.ejes.axis("off")
         self.ejes.add_patch(Rectangle((0, 0), 1, 1, linewidth=2, edgecolor="black", facecolor="none"))
-        nx.draw(grafo, pos=posiciones, with_labels=True, font_weight="bold", ax=self.ejes,
+        nx.draw(grafo, pos=posiciones, with_labels=True, font_weight="bold", ax=self.ejes, node_size=TAMANO_NODO,
+                node_color=[COLOR_NODO_RESALTADO if nodo == self.nodo_resaltado else COLOR_NODO for nodo in grafo.nodes],
                 edge_color=[self.modelo.color_arista(origen, destino) for origen, destino in grafo.edges])
         nx.draw_networkx_edge_labels(grafo, pos=posiciones, edge_labels=nx.get_edge_attributes(grafo, "weight"),
                                      ax=self.ejes)
@@ -42,3 +62,66 @@ class Lienzo(FigureCanvasQTAgg):
 
     def guardar_imagen(self, ruta):
         self.figure.savefig(ruta, bbox_inches="tight", pad_inches=0.1)
+
+    # Elementos bajo el cursor, en píxeles de la figura
+
+    def _en_pixeles(self, nodo):
+        return self.ejes.transData.transform(self.modelo.posiciones[nodo])
+
+    def nodo_en(self, x, y):
+        radio = math.sqrt(TAMANO_NODO) / 2 * self.figure.dpi / 72 + TOLERANCIA_PX
+        cercanos = [(math.dist((x, y), self._en_pixeles(nodo)), nodo) for nodo in self.modelo.grafo.nodes]
+        cercanos = [candidato for candidato in cercanos if candidato[0] <= radio]
+        return min(cercanos, key=lambda candidato: candidato[0])[1] if cercanos else None
+
+    def arista_en(self, x, y):
+        cercanas = [(_distancia_a_segmento((x, y), self._en_pixeles(origen), self._en_pixeles(destino)), (origen, destino))
+                    for origen, destino in self.modelo.grafo.edges]
+        cercanas = [candidata for candidata in cercanas if candidata[0] <= TOLERANCIA_PX]
+        return min(cercanas, key=lambda candidata: candidata[0])[1] if cercanas else None
+
+    # Eventos del mouse
+
+    def _al_presionar(self, evento):
+        if evento.inaxes is not self.ejes:
+            return
+        nodo = self.nodo_en(evento.x, evento.y)
+        if evento.button == MouseButton.RIGHT:
+            if nodo is not None:
+                self.menu_nodo.emit(nodo)
+            elif (arista := self.arista_en(evento.x, evento.y)) is not None:
+                self.menu_arista.emit(*arista)
+        elif evento.button == MouseButton.LEFT:
+            if nodo is None:
+                self.clic_vacio.emit(evento.xdata, evento.ydata)
+            else:
+                self._arrastre = {"nodo": nodo, "inicio": self.modelo.posiciones[nodo],
+                                  "pixel": (evento.x, evento.y), "movido": False}
+
+    def _al_mover(self, evento):
+        arrastre = self._arrastre
+        if arrastre is None or evento.inaxes is not self.ejes:
+            return
+        if not arrastre["movido"] and math.dist((evento.x, evento.y), arrastre["pixel"]) < UMBRAL_ARRASTRE_PX:
+            return
+        arrastre["movido"] = True
+        self.modelo.mover_nodo(arrastre["nodo"], evento.xdata, evento.ydata)
+        self.dibujar()
+
+    def _al_soltar(self, _evento):
+        arrastre, self._arrastre = self._arrastre, None
+        if arrastre is None:
+            return
+        nodo = arrastre["nodo"]
+        if arrastre["movido"]:
+            self.nodo_movido.emit(nodo, arrastre["inicio"], self.modelo.posiciones[nodo])
+        else:
+            self.clic_nodo.emit(nodo)
+
+
+def _distancia_a_segmento(punto, inicio, fin):
+    (px, py), (ax, ay), (bx, by) = punto, inicio, fin
+    dx, dy = bx - ax, by - ay
+    largo2 = dx * dx + dy * dy
+    t = 0.0 if largo2 == 0 else max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / largo2))
+    return math.hypot(px - (ax + t * dx), py - (ay + t * dy))

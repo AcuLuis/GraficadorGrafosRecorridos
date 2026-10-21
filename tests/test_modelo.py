@@ -53,6 +53,44 @@ class TestEdicion:
         with pytest.raises(ValueError, match="no existe"):
             modelo.eliminar_nodo(9)
 
+    def test_mover_nodo_dentro_del_area(self, modelo):
+        modelo.mover_nodo(1, 0.4, 0.6)
+        assert modelo.posiciones[1] == (0.4, 0.6)
+        modelo.mover_nodo(1, -0.5, 1.5)
+        assert modelo.posiciones[1] == (0.0, 1.0)
+
+    def test_peso_y_cambiar_peso(self, modelo):
+        assert modelo.peso(2, 1) == 4
+        modelo.cambiar_peso(1, 2, 9)
+        assert modelo.peso(1, 2) == 9
+
+    @pytest.mark.parametrize("operacion", [
+        lambda modelo: modelo.agregar_arista(1, 3, -1),
+        lambda modelo: modelo.cambiar_peso(1, 2, -1),
+    ])
+    def test_rechaza_pesos_negativos(self, modelo, operacion):
+        with pytest.raises(ValueError, match="mayor o igual a 0"):
+            operacion(modelo)
+
+    def test_eliminar_arista(self, modelo):
+        modelo.pintar_aristas([(1, 2)], "blue")
+        modelo.eliminar_arista(2, 1)
+        assert not modelo.grafo.has_edge(1, 2)
+        assert modelo.colores == {}
+        with pytest.raises(ValueError, match="No existe la arista"):
+            modelo.eliminar_arista(1, 2)
+
+    def test_eliminar_arista_dirigida_conserva_la_opuesta(self):
+        modelo = ModeloGrafo(dirigido=True)
+        modelo.agregar_nodo(0, 0)
+        modelo.agregar_nodo(1, 1)
+        modelo.agregar_arista(1, 2)
+        modelo.agregar_arista(2, 1)
+        modelo.pintar_aristas([(1, 2), (2, 1)], "blue")
+        modelo.eliminar_arista(1, 2)
+        assert modelo.grafo.has_edge(2, 1)
+        assert modelo.color_arista(2, 1) == "blue"
+
     def test_cambiar_tipo_vacia_el_grafo(self, modelo):
         modelo.cambiar_tipo(dirigido=True)
         assert modelo.dirigido

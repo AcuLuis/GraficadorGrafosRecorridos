@@ -1,13 +1,14 @@
 import math
 from pathlib import Path
 
-from PyQt6.QtGui import QFont, QUndoStack
-from PyQt6.QtWidgets import (QFileDialog, QFrame, QGroupBox, QHBoxLayout, QLabel, QMessageBox,
-                             QPushButton, QRadioButton, QVBoxLayout, QWidget)
+from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtGui import QCursor, QFont, QUndoStack
+from PyQt6.QtWidgets import (QFileDialog, QGroupBox, QHBoxLayout, QLabel, QMenu, QMessageBox,
+                             QPushButton, QRadioButton, QSizePolicy, QVBoxLayout, QWidget)
 
 import algoritmos
 from ui.comandos import ComandoModelo
-from ui.dialogos import pedir_arista, pedir_nodo
+from ui.dialogos import pedir_arista, pedir_nodo, pedir_peso
 from ui.lienzo import Lienzo
 
 CARPETA_DATOS = Path(__file__).resolve().parent.parent / "datos"
@@ -20,13 +21,25 @@ DFS = "DFS - Búsqueda en profundidad"
 KRUSKAL = "Kruskal - Árbol de expansión mínima"
 DIJKSTRA = "Dijkstra - Camino más corto"
 
+AYUDA_MODO_NODO = ("Clic en un espacio vacío: crear nodo · Arrastrar un nodo: moverlo · "
+                   "Clic en un nodo: seleccionarlo · Clic derecho: más opciones")
+AYUDA_ARISTA_ORIGEN = "Modo arista: haz clic en el nodo de origen."
+AYUDA_ARISTA_DESTINO = "Modo arista: origen en el nodo {nodo}. Haz clic en el nodo de destino (Esc cancela)."
+
 
 def texto_pasos(titulo, aristas):
     return titulo + "\n" + "".join(f"Va de nodo {arista[0]} -> nodo {arista[1]}\n" for arista in aristas)
 
 
 class PanelVista(QWidget):
-    """Área principal: controles de edición, lienzo y ejecución de algoritmos sobre el modelo."""
+    """Área principal: controles de edición, lienzo y ejecución de algoritmos sobre el modelo.
+
+    Emite ``ayuda(texto)`` con las instrucciones del modo actual y ``notificacion(texto)``
+    con la descripción de cada cambio aplicado al grafo.
+    """
+
+    ayuda = pyqtSignal(str)
+    notificacion = pyqtSignal(str)
 
     def __init__(self, modelo, panel_info, parent=None):
         super().__init__(parent)
@@ -49,33 +62,39 @@ class PanelVista(QWidget):
         layout_algoritmo.addWidget(self.lbl_algoritmo)
         layout_algoritmo.addStretch()
 
-        self.grupo_tipo = QGroupBox("Selecciona el tipo de grafo")
-        self.rb_no_dirigido = QRadioButton("Grafo No Dirigido")
-        self.rb_dirigido = QRadioButton("Grafo Dirigido")
+        self.grupo_tipo = QGroupBox("Tipo de grafo")
+        self.rb_no_dirigido = QRadioButton("No dirigido")
+        self.rb_dirigido = QRadioButton("Dirigido")
         self.rb_no_dirigido.setChecked(True)
         layout_tipo = QHBoxLayout(self.grupo_tipo)
         layout_tipo.addWidget(self.rb_no_dirigido)
         layout_tipo.addWidget(self.rb_dirigido)
 
-        grupo_edicion = QGroupBox("Selecciona una opción")
+        grupo_edicion = QGroupBox("Edición")
         self.rb_dibujar_nodo = QRadioButton("Dibujar Nodo")
         self.rb_dibujar_arista = QRadioButton("Dibujar Arista")
-        self.btn_ingresar_arista = QPushButton("Ingresar Puntos")
+        self.btn_ingresar_arista = QPushButton("Ingresar Arista…")
+        self.btn_eliminar_nodo = QPushButton("Eliminar Nodo…")
         self.btn_limpiar = QPushButton("Limpiar")
-        self.btn_eliminar_nodo = QPushButton("Eliminar Nodo")
         self.rb_dibujar_nodo.setChecked(True)
-        self.btn_ingresar_arista.setEnabled(False)
+        self.rb_dibujar_nodo.setToolTip("Clic en el lienzo para crear nodos; arrastra un nodo para moverlo.")
+        self.rb_dibujar_arista.setToolTip("Clic en el nodo de origen y luego en el de destino.")
+        self.btn_ingresar_arista.setToolTip("Agregar una arista escribiendo sus nodos y su peso.")
         layout_edicion = QHBoxLayout(grupo_edicion)
         for widget in (self.rb_dibujar_nodo, self.rb_dibujar_arista, self.btn_ingresar_arista,
-                       self.btn_limpiar, self.btn_eliminar_nodo):
+                       self.btn_eliminar_nodo, self.btn_limpiar):
             layout_edicion.addWidget(widget)
+        layout_edicion.addStretch()
 
-        cabecera = QFrame()
+        cabecera = QWidget()
+        cabecera.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         layout_cabecera = QVBoxLayout(cabecera)
+        layout_cabecera.setContentsMargins(0, 0, 0, 0)
         layout_cabecera.addWidget(grupo_algoritmo)
-        #layout_cabecera.addWidget(self.grupo_tipo)
-        layout_cabecera.addWidget(grupo_edicion)
-        cabecera.setFixedHeight(290)
+        fila_controles = QHBoxLayout()
+        fila_controles.addWidget(self.grupo_tipo)
+        fila_controles.addWidget(grupo_edicion, 1)
+        layout_cabecera.addLayout(fila_controles)
 
         self.lienzo = Lienzo(self.modelo)
         grupo_grafo = QGroupBox("Vista Grafo")
@@ -83,16 +102,86 @@ class PanelVista(QWidget):
 
         layout = QVBoxLayout(self)
         layout.addWidget(cabecera)
-        layout.addWidget(grupo_grafo)
+        layout.addWidget(grupo_grafo, 1)
         self.setMinimumSize(ANCHO_MINIMO, ALTO_MINIMO)
 
-        self.lienzo.clic.connect(self._al_hacer_clic)
+        self.lienzo.clic_vacio.connect(self._al_hacer_clic_vacio)
+        self.lienzo.clic_nodo.connect(self._al_hacer_clic_en_nodo)
+        self.lienzo.nodo_movido.connect(self._al_mover_nodo)
+        self.lienzo.menu_nodo.connect(lambda nodo: self.menu_nodo(nodo).exec(QCursor.pos()))
+        self.lienzo.menu_arista.connect(lambda origen, destino: self.menu_arista(origen, destino).exec(QCursor.pos()))
         self.rb_dirigido.clicked.connect(self.cambiar_tipo_grafo)
         self.rb_no_dirigido.clicked.connect(self.cambiar_tipo_grafo)
-        self.rb_dibujar_arista.toggled.connect(self.btn_ingresar_arista.setEnabled)
+        self.rb_dibujar_arista.toggled.connect(lambda *_: self.seleccionar(None))
         self.btn_ingresar_arista.clicked.connect(self.pedir_arista)
-        self.btn_limpiar.clicked.connect(self.limpiar)
         self.btn_eliminar_nodo.clicked.connect(self.pedir_nodo_a_eliminar)
+        self.btn_limpiar.clicked.connect(self.limpiar)
+
+    # Selección y ayuda
+
+    @property
+    def seleccionado(self):
+        return self.lienzo.nodo_resaltado
+
+    def seleccionar(self, nodo):
+        self.lienzo.nodo_resaltado = nodo
+        self.lienzo.dibujar()
+        self.actualizar_ayuda()
+
+    def actualizar_ayuda(self):
+        if self.rb_dibujar_nodo.isChecked():
+            texto = AYUDA_MODO_NODO
+        elif self.seleccionado is None:
+            texto = AYUDA_ARISTA_ORIGEN
+        else:
+            texto = AYUDA_ARISTA_DESTINO.format(nodo=self.seleccionado)
+        self.ayuda.emit(texto)
+
+    def nombre_arista(self, origen, destino):
+        return f"{origen} → {destino}" if self.modelo.dirigido else f"{origen} - {destino}"
+
+    # Interacción con el lienzo
+
+    def _al_hacer_clic_vacio(self, x, y):
+        if self.rb_dibujar_nodo.isChecked():
+            self.lienzo.nodo_resaltado = None
+            self._modificar(f"Crear nodo {self.modelo.siguiente_id()}", lambda: self.modelo.agregar_nodo(x, y))
+            self.actualizar_ayuda()
+        else:
+            self.seleccionar(None)
+
+    def _al_hacer_clic_en_nodo(self, nodo):
+        origen = self.seleccionado
+        if self.rb_dibujar_nodo.isChecked() or origen is None or origen == nodo:
+            self.seleccionar(None if origen == nodo else nodo)
+            return
+        self.seleccionar(None)
+        existe = self.modelo.grafo.has_edge(origen, nodo)
+        peso = pedir_peso(self, f"Peso de la arista {self.nombre_arista(origen, nodo)}:",
+                          self.modelo.peso(origen, nodo) if existe else 1)
+        if peso is not None:
+            self.agregar_arista(origen, nodo, peso)
+
+    def _al_mover_nodo(self, nodo, inicio, fin):
+        # Durante el arrastre el lienzo ya movió el nodo; se registra el cambio completo para poder deshacerlo.
+        self.modelo.mover_nodo(nodo, *inicio)
+        self._modificar(f"Mover nodo {nodo}", lambda: self.modelo.mover_nodo(nodo, *fin))
+
+    def menu_nodo(self, nodo):
+        menu = QMenu(self)
+        _agregar_opcion(menu, f"Eliminar nodo {nodo}", lambda: self.eliminar_nodo(nodo))
+        menu.addSeparator()
+        _agregar_opcion(menu, f"BFS desde el nodo {nodo}", lambda: self.ejecutar_bfs(nodo))
+        _agregar_opcion(menu, f"DFS desde el nodo {nodo}", lambda: self.ejecutar_dfs(nodo))
+        _agregar_opcion(menu, f"Dijkstra desde el nodo {nodo}", lambda: self.ejecutar_dijkstra(nodo))
+        return menu
+
+    def menu_arista(self, origen, destino):
+        menu = QMenu(self)
+        nombre = self.nombre_arista(origen, destino)
+        _agregar_opcion(menu, f"Editar peso de {nombre}…", lambda: self.pedir_nuevo_peso(origen, destino))
+        _agregar_opcion(menu, f"Eliminar arista {nombre}", lambda: self.eliminar_arista(origen, destino))
+        return menu
 
     # Edición del grafo
 
@@ -112,11 +201,15 @@ class PanelVista(QWidget):
         self.pila_deshacer.push(ComandoModelo(descripcion, self.modelo, antes, self.modelo.instantanea(),
                                               self._grafo_modificado))
         self._grafo_modificado()
+        self.notificacion.emit(descripcion)
         return True
 
     def _grafo_modificado(self):
         """Actualiza la vista tras un cambio del modelo, recalculando el último algoritmo."""
         self._sincronizar_tipo()
+        if self.seleccionado is not None and self.seleccionado not in self.modelo.grafo:
+            self.lienzo.nodo_resaltado = None
+            self.actualizar_ayuda()
         if self.ultimo_algoritmo and self.modelo.tiene_aristas():
             ejecutar, argumentos = self.ultimo_algoritmo
             if argumentos and argumentos[0] not in self.modelo.grafo:
@@ -127,18 +220,26 @@ class PanelVista(QWidget):
             self._limpiar_resultado()
         self.lienzo.dibujar()
 
-    def _al_hacer_clic(self, x, y):
-        if self.rb_dibujar_nodo.isChecked():
-            self._modificar(f"Crear nodo {self.modelo.siguiente_id()}", lambda: self.modelo.agregar_nodo(x, y))
-
     def pedir_arista(self):
         valores = pedir_arista(self)
         if valores is not None:
             self.agregar_arista(*valores)
 
     def agregar_arista(self, origen, destino, peso):
-        self._modificar(f"Agregar arista {origen}-{destino}",
-                        lambda: self.modelo.agregar_arista(origen, destino, peso))
+        nombre = self.nombre_arista(origen, destino)
+        descripcion = (f"Cambiar peso de {nombre}" if self.modelo.grafo.has_edge(origen, destino)
+                       else f"Agregar arista {nombre}")
+        self._modificar(descripcion, lambda: self.modelo.agregar_arista(origen, destino, peso))
+
+    def pedir_nuevo_peso(self, origen, destino):
+        nombre = self.nombre_arista(origen, destino)
+        peso = pedir_peso(self, f"Peso de la arista {nombre}:", self.modelo.peso(origen, destino))
+        if peso is not None:
+            self._modificar(f"Cambiar peso de {nombre}", lambda: self.modelo.cambiar_peso(origen, destino, peso))
+
+    def eliminar_arista(self, origen, destino):
+        self._modificar(f"Eliminar arista {self.nombre_arista(origen, destino)}",
+                        lambda: self.modelo.eliminar_arista(origen, destino))
 
     def pedir_nodo_a_eliminar(self):
         nodo = pedir_nodo("Eliminar Nodo", self)
@@ -149,23 +250,36 @@ class PanelVista(QWidget):
         self._modificar(f"Eliminar nodo {nodo}", lambda: self.modelo.eliminar_nodo(nodo))
 
     def limpiar(self):
+        if self.modelo.grafo.number_of_nodes() and not self._confirmar("Se borrará todo el grafo."):
+            return
         self._modificar("Limpiar grafo", self.modelo.limpiar, reiniciar_resultado=True)
 
     def cambiar_tipo_grafo(self):
         dirigido = self.rb_dirigido.isChecked()
         if dirigido == self.modelo.dirigido:
             return
-        if self.modelo.grafo.number_of_nodes() and not self._confirmar_borrado():
+        if self.modelo.grafo.number_of_nodes() and not self._confirmar(
+                "Al cambiar el tipo de grafo se borrará el grafo actual."):
             self._sincronizar_tipo()
             return
         self._modificar("Cambiar a grafo dirigido" if dirigido else "Cambiar a grafo no dirigido",
                         lambda: self.modelo.cambiar_tipo(dirigido), reiniciar_resultado=True)
 
-    def _confirmar_borrado(self):
-        alerta = QMessageBox(QMessageBox.Icon.Warning, "Alerta",
-                             "Se borrará tu avance.\n¿Estás seguro de continuar?", parent=self)
+    def conservar_recorrido(self):
+        if not self.modelo.tiene_aristas():
+            return
+        if not any(self.modelo.color_arista(*arista) == COLOR_RECORRIDO for arista in self.modelo.grafo.edges):
+            QMessageBox.warning(self, "Alerta", "Primero ejecuta un algoritmo para obtener un recorrido.")
+            return
+        if self._confirmar("Se eliminarán las aristas que no forman parte del recorrido."):
+            self._modificar("Conservar recorrido", lambda: self.modelo.conservar_aristas(COLOR_RECORRIDO))
+
+    def _confirmar(self, mensaje):
+        alerta = QMessageBox(QMessageBox.Icon.Warning, "Confirmar",
+                             f"{mensaje}\nPuedes deshacerlo con Ctrl+Z.\n¿Deseas continuar?", parent=self)
         btn_si = alerta.addButton("Sí", QMessageBox.ButtonRole.YesRole)
         alerta.addButton("Cancelar", QMessageBox.ButtonRole.NoRole)
+        alerta.setDefaultButton(btn_si)
         alerta.exec()
         return alerta.clickedButton() is btn_si
 
@@ -227,10 +341,6 @@ class PanelVista(QWidget):
         self.lbl_algoritmo.setText(nombre)
         self.ultimo_algoritmo = (repetir, argumentos)
 
-    def conservar_recorrido(self):
-        if self.modelo.tiene_aristas():
-            self._modificar("Conservar recorrido", lambda: self.modelo.conservar_aristas(COLOR_RECORRIDO))
-
     # Archivos
 
     def guardar_imagen(self):
@@ -250,6 +360,8 @@ class PanelVista(QWidget):
             self.modelo.guardar_json(ruta)
         except OSError as error:
             QMessageBox.critical(self, "Error", f"No se pudo guardar el grafo:\n{error}")
+            return
+        self.notificacion.emit(f"Grafo guardado en {ruta}")
 
     def cargar_json(self):
         ruta, _ = QFileDialog.getOpenFileName(self, "Cargar Grafo", "", "JSON Files (*.json);;All Files (*)")
@@ -261,3 +373,7 @@ class PanelVista(QWidget):
         self._modificar("Cargar grafo de prueba",
                         lambda: self.modelo.cargar_texto(CARPETA_DATOS / "Nodos.txt", CARPETA_DATOS / "Aristas.txt"),
                         reiniciar_resultado=True, prefijo_error="No se pudo cargar el grafo de prueba:\n")
+
+
+def _agregar_opcion(menu, texto, funcion):
+    menu.addAction(texto).triggered.connect(lambda *_: funcion())
