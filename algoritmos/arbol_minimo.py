@@ -1,4 +1,7 @@
-from algoritmos.comun import cantidad, peso
+import heapq
+import itertools
+
+from algoritmos.comun import cantidad, peso, validar_inicio
 from algoritmos.pasos import Paso
 
 
@@ -50,6 +53,60 @@ def kruskal_pasos(grafo):
     return pasos
 
 
+def prim_pasos(grafo, inicio):
+    """Árbol de expansión mínima con el algoritmo de Prim, paso a paso.
+
+    El árbol crece desde ``inicio`` agregando siempre la arista más liviana que sale de él.
+    Si el grafo no es conexo, solo cubre el componente de ``inicio``. La ``frontera`` son los
+    nodos candidatos (alcanzables por una arista desde el árbol), del más cercano al más lejano.
+    """
+    if grafo.is_directed():
+        raise ValueError("Prim solo aplica a grafos no dirigidos.")
+    validar_inicio(grafo, inicio)
+    en_arbol = {inicio}
+    elegidas = []
+    descartadas = []
+    desempate = itertools.count()
+    candidatas = []
+    pasos = []
+
+    def agregar_candidatas(nodo):
+        for vecino in grafo.neighbors(nodo):
+            if vecino not in en_arbol:
+                heapq.heappush(candidatas, (peso(grafo, nodo, vecino), next(desempate), nodo, vecino))
+
+    def registrar(descripcion, actual=None, arista_actual=None):
+        frontera = dict.fromkeys(fin for _, _, _, fin in sorted(candidatas) if fin not in en_arbol)
+        pasos.append(Paso(descripcion, actual=actual, frontera=tuple(frontera), visitados=frozenset(en_arbol),
+                          aristas=tuple(elegidas), arista_actual=arista_actual, descartadas=tuple(descartadas)))
+
+    agregar_candidatas(inicio)
+    registrar(f"El árbol comienza en el nodo {inicio}.", actual=inicio)
+    while candidatas:
+        peso_arista, _, origen, destino = heapq.heappop(candidatas)
+        if destino in en_arbol:
+            descartadas.append((origen, destino))
+            registrar(f"Se descarta la arista {origen}-{destino} (peso {peso_arista}): "
+                      f"ambos nodos ya están en el árbol.", arista_actual=(origen, destino))
+            continue
+        en_arbol.add(destino)
+        elegidas.append((origen, destino))
+        agregar_candidatas(destino)
+        registrar(f"Se agrega la arista {origen}-{destino} (peso {peso_arista}), la más liviana que sale del árbol.",
+                  actual=destino, arista_actual=(origen, destino))
+    total = sum(peso(grafo, *arista) for arista in elegidas)
+    resumen = f"Árbol de expansión mínima: {cantidad(len(elegidas), 'arista', 'aristas')}, peso total {total}."
+    if len(en_arbol) < grafo.number_of_nodes():
+        resumen += f" El grafo no es conexo: el árbol solo cubre el componente del nodo {inicio}."
+    registrar(resumen)
+    return pasos
+
+
 def kruskal(grafo):
     """Aristas del árbol de expansión mínima como ``(origen, destino, peso)``, en el orden en que se agregan."""
     return [(origen, destino, peso(grafo, origen, destino)) for origen, destino in kruskal_pasos(grafo)[-1].aristas]
+
+
+def prim(grafo, inicio):
+    """Aristas del árbol de expansión mínima de Prim como ``(origen, destino, peso)``, en el orden en que se agregan."""
+    return [(origen, destino, peso(grafo, origen, destino)) for origen, destino in prim_pasos(grafo, inicio)[-1].aristas]

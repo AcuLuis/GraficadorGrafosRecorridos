@@ -3,7 +3,7 @@ import math
 import networkx as nx
 import pytest
 
-from algoritmos import bfs_pasos, camino_minimo, dfs_pasos, dijkstra_pasos, kruskal_pasos
+from algoritmos import bfs_pasos, camino_minimo, dfs_pasos, dijkstra_pasos, kruskal_pasos, prim, prim_pasos
 from conftest import construir
 
 
@@ -83,6 +83,36 @@ class TestKruskalPasos:
     def test_bosque(self):
         final = kruskal_pasos(construir([(1, 2, 3), (3, 4, 1)]))[-1]
         assert final.descripcion.startswith("Bosque (el grafo no es conexo)")
+
+
+class TestPrim:
+    @pytest.mark.parametrize("inicio", [1, 4, 7])
+    def test_arbol_de_peso_minimo(self, grafo_prueba, inicio):
+        aristas = prim(grafo_prueba, inicio)
+        arbol = construir(aristas)
+        assert nx.is_tree(arbol) and set(arbol.nodes) == set(grafo_prueba.nodes)
+        assert sum(peso for _, _, peso in aristas) == nx.minimum_spanning_tree(grafo_prueba).size(weight="weight")
+
+    def test_invariantes_y_descartadas(self, grafo_prueba):
+        pasos = prim_pasos(grafo_prueba, 1)
+        invariantes_comunes(pasos)
+        for paso in pasos:
+            if paso.descartadas and paso.arista_actual == paso.descartadas[-1]:
+                assert set(paso.arista_actual) <= paso.visitados
+
+    def test_crece_desde_el_inicio(self, grafo_prueba):
+        pasos = prim_pasos(grafo_prueba, 6)
+        assert pasos[0].visitados == {6}
+        assert pasos[1].arista_actual == (6, 4)  # la arista más liviana que sale del nodo 6
+
+    def test_grafo_no_conexo(self):
+        final = prim_pasos(construir([(1, 2, 3), (3, 4, 1)]), 1)[-1]
+        assert final.aristas == ((1, 2),)
+        assert "no es conexo" in final.descripcion
+
+    def test_rechaza_grafos_dirigidos(self, grafo_dirigido):
+        with pytest.raises(ValueError, match="no dirigidos"):
+            prim_pasos(grafo_dirigido, 1)
 
 
 class TestDijkstraPasos:
