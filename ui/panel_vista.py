@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (QFileDialog, QGroupBox, QHBoxLayout, QLabel, QMenu,
 
 import algoritmos
 from ui.comandos import ComandoModelo
-from ui.dialogos import pedir_arista, pedir_nodo, pedir_peso
+from ui.dialogos import pedir_arista, pedir_inicio_y_destino, pedir_nodo, pedir_peso
 from ui.estilos import LEYENDAS, estilo_de_paso
 from ui.leyenda import Leyenda
 from ui.lienzo import Lienzo
@@ -189,6 +189,10 @@ class PanelVista(QWidget):
         _agregar_opcion(menu, f"BFS desde el nodo {nodo}", lambda: self.ejecutar_bfs(nodo))
         _agregar_opcion(menu, f"DFS desde el nodo {nodo}", lambda: self.ejecutar_dfs(nodo))
         _agregar_opcion(menu, f"Dijkstra desde el nodo {nodo}", lambda: self.ejecutar_dijkstra(nodo))
+        origen = self.seleccionado
+        if origen is not None and origen != nodo:
+            _agregar_opcion(menu, f"Camino más corto del nodo {origen} al nodo {nodo}",
+                            lambda: self.ejecutar_dijkstra(origen, nodo))
         return menu
 
     def menu_arista(self, origen, destino):
@@ -227,8 +231,10 @@ class PanelVista(QWidget):
             self.actualizar_ayuda()
         if self.ultimo_algoritmo and self.modelo.tiene_aristas():
             ejecutar, argumentos = self.ultimo_algoritmo
-            if argumentos and argumentos[0] not in self.modelo.grafo:
-                argumentos = (next(iter(self.modelo.grafo.nodes)),)
+            # Si se eliminó el nodo inicial se usa el primero del grafo; si se eliminó el destino, ninguno.
+            argumentos = tuple(nodo if nodo in self.modelo.grafo else None for nodo in argumentos)
+            if argumentos and argumentos[0] is None:
+                argumentos = (next(iter(self.modelo.grafo.nodes)), *argumentos[1:])
             indice, en_el_ultimo = self.reproductor.indice, self.reproductor.indice == self.reproductor.total - 1
             ejecutar(*argumentos)
             if not en_el_ultimo:
@@ -330,12 +336,25 @@ class PanelVista(QWidget):
         if not self.modelo.tiene_aristas():
             QMessageBox.warning(self, "Advertencia", "No hay nodo o no hay aristas.")
             return
-        sugerido = self.seleccionado
-        if sugerido is None and self.ultimo_algoritmo and self.ultimo_algoritmo[1]:
-            sugerido = self.ultimo_algoritmo[1][0]
-        inicio = pedir_nodo("Nodo Inicial", self.modelo.grafo.nodes, self, sugerido)
+        inicio = pedir_nodo("Nodo Inicial", self.modelo.grafo.nodes, self, self._inicio_sugerido())
         if inicio is not None:
             ejecutar(inicio)
+
+    def pedir_y_ejecutar_dijkstra(self):
+        """Pide el nodo inicial y, opcionalmente, el destino, y ejecuta Dijkstra."""
+        if not self.modelo.tiene_aristas():
+            QMessageBox.warning(self, "Advertencia", "No hay nodo o no hay aristas.")
+            return
+        eleccion = pedir_inicio_y_destino(self.modelo.grafo.nodes, self, self._inicio_sugerido())
+        if eleccion is not None:
+            self.ejecutar_dijkstra(*eleccion)
+
+    def _inicio_sugerido(self):
+        if self.seleccionado is not None:
+            return self.seleccionado
+        if self.ultimo_algoritmo and self.ultimo_algoritmo[1]:
+            return self.ultimo_algoritmo[1][0]
+        return None
 
     def ejecutar_bfs(self, inicio):
         self._ejecutar(BFS, f"desde el nodo {inicio}", "bfs",
@@ -349,9 +368,11 @@ class PanelVista(QWidget):
         self._ejecutar(KRUSKAL, "", "kruskal", lambda: algoritmos.kruskal_pasos(self.modelo.grafo),
                        self.ejecutar_kruskal)
 
-    def ejecutar_dijkstra(self, inicio):
-        self._ejecutar(DIJKSTRA, f"desde el nodo {inicio}", "dijkstra",
-                       lambda: algoritmos.dijkstra_pasos(self.modelo.grafo, inicio), self.ejecutar_dijkstra, inicio)
+    def ejecutar_dijkstra(self, inicio, destino=None):
+        detalle = f"desde el nodo {inicio}" if destino is None else f"del nodo {inicio} al nodo {destino}"
+        self._ejecutar(DIJKSTRA, detalle, "dijkstra",
+                       lambda: algoritmos.dijkstra_pasos(self.modelo.grafo, inicio, destino),
+                       self.ejecutar_dijkstra, inicio, destino)
 
     def _ejecutar(self, nombre, detalle, leyenda, calcular, repetir, *argumentos):
         """Calcula los pasos del algoritmo, guarda el resultado en el modelo y muestra el último paso."""
@@ -370,9 +391,7 @@ class PanelVista(QWidget):
         self.ultimo_algoritmo = (repetir, argumentos)
         self.lbl_algoritmo.setText(nombre)
         self.leyenda.mostrar(LEYENDAS[leyenda])
-        self.panel_info.mostrar_resultado(f"{nombre} {detalle}".strip(), final.descripcion,
-                                          [paso.descripcion for paso in pasos],
-                                          con_distancias=final.distancias is not None)
+        self.panel_info.mostrar_resultado(f"{nombre} {detalle}".strip(), pasos)
         self.reproductor.cargar(len(pasos))
 
     def _mostrar_paso(self, indice):

@@ -1,6 +1,6 @@
 import sys
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QLibraryInfo, QLocale, Qt, QTranslator
 from PyQt6.QtGui import QAction, QKeySequence
 from PyQt6.QtWidgets import QApplication, QDockWidget, QLabel, QMainWindow
 
@@ -45,6 +45,7 @@ class MainWindow(QMainWindow):
             ("Guardar Avance", vista.guardar_json, teclas.Save),
             ("Cargar Avance", vista.cargar_json, teclas.Open),
             ("Guardar Imagen", vista.guardar_imagen, "Ctrl+E"),
+            ("Exportar Pasos…", self.panel_info.exportar, "Ctrl+Shift+E"),
             None,
             ("Salir", self.close, "Ctrl+Q"),
         ])
@@ -67,7 +68,7 @@ class MainWindow(QMainWindow):
             (BFS, lambda *_: vista.pedir_inicio_y_ejecutar(vista.ejecutar_bfs), "Ctrl+1"),
             (DFS, lambda *_: vista.pedir_inicio_y_ejecutar(vista.ejecutar_dfs), "Ctrl+2"),
             (KRUSKAL, vista.ejecutar_kruskal, "Ctrl+3"),
-            (DIJKSTRA, lambda *_: vista.pedir_inicio_y_ejecutar(vista.ejecutar_dijkstra), "Ctrl+4"),
+            (DIJKSTRA, vista.pedir_y_ejecutar_dijkstra, "Ctrl+4"),
         ])
         reproductor = vista.reproductor
         self._agregar_menu("&Pasos", [
@@ -102,8 +103,22 @@ class MainWindow(QMainWindow):
         self.panel_vista.actualizar_ayuda()
 
 
+def instalar_traducciones(app):
+    """Traduce al español los textos propios de Qt, como los botones Aceptar y Cancelar.
+
+    Devuelve el traductor instalado, o ``None`` si no se encontraron las traducciones.
+    """
+    traductor = QTranslator(app)
+    carpeta = QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath)
+    if not traductor.load(QLocale(QLocale.Language.Spanish), "qtbase", "_", carpeta):
+        return None
+    app.installTranslator(traductor)
+    return traductor
+
+
 def main():
     app = QApplication(sys.argv)
+    instalar_traducciones(app)
     ventana = MainWindow()
     ventana.show()
     sys.exit(app.exec())

@@ -1,6 +1,8 @@
 """Pruebas de humo de la interfaz, sin ventana visible."""
+import csv
 import os
 
+import networkx as nx
 import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -8,9 +10,9 @@ QtWidgets = pytest.importorskip("PyQt6.QtWidgets")
 
 from matplotlib.backend_bases import MouseButton, MouseEvent  # noqa: E402
 
-from ui import panel_vista  # noqa: E402
+from ui import dialogos, panel_vista  # noqa: E402
 from ui.estilos import COLORES  # noqa: E402
-from ui.ventana_principal import MainWindow  # noqa: E402
+from ui.ventana_principal import MainWindow, instalar_traducciones  # noqa: E402
 
 ESQUINA_VACIA = (0.02, 0.98)
 
@@ -324,7 +326,7 @@ class TestNodoInicial:
 
     def test_sugiere_el_nodo_seleccionado(self, ventana, vista, nodo_elegido):
         vista.seleccionar(5)
-        accion(ventana, panel_vista.DIJKSTRA).trigger()
+        accion(ventana, panel_vista.DFS).trigger()
         assert nodo_elegido["opciones"][nodo_elegido["indice"]] == "5"
 
     def test_sugiere_el_ultimo_inicio(self, ventana, vista, nodo_elegido):
@@ -484,6 +486,76 @@ class TestAnimacion:
         vista.reproductor.ultimo()
         vista.eliminar_nodo(7)
         assert vista.reproductor.indice == vista.reproductor.total - 1
+
+
+class TestDijkstraConDestino:
+    def test_dialogo_inicio_y_destino(self, app):
+        dialogo = dialogos.DialogoInicioDestino([1, 2, 3], sugerido=2)
+        assert dialogo.eleccion() == (2, None)
+        dialogo.cmb_destino.setCurrentIndex(3)
+        assert dialogo.eleccion() == (2, 3)
+
+    def test_menu_algoritmos(self, ventana, vista, monkeypatch):
+        monkeypatch.setattr(panel_vista, "pedir_inicio_y_destino", lambda *a, **k: (1, 6))
+        accion(ventana, panel_vista.DIJKSTRA).trigger()
+        assert vista.panel_info.titulo == f"{panel_vista.DIJKSTRA} del nodo 1 al nodo 6"
+        assert vista.panel_info.resumen == "Camino más corto: 1 → 3 → 6, costo 10."
+        assert sorted(map(sorted, aristas_azules(vista))) == [[1, 3], [3, 6]]
+
+    def test_sin_destino_calcula_todos(self, ventana, vista, monkeypatch):
+        monkeypatch.setattr(panel_vista, "pedir_inicio_y_destino", lambda *a, **k: (1, None))
+        accion(ventana, panel_vista.DIJKSTRA).trigger()
+        assert len(aristas_azules(vista)) == 7
+
+    def test_menu_contextual_desde_el_seleccionado(self, vista):
+        vista.seleccionar(2)
+        TestMenusContextuales.disparar(vista.menu_nodo(6), "Camino más corto del nodo 2 al nodo 6")
+        costo, camino = nx.single_source_dijkstra(vista.modelo.grafo, 2, 6)
+        assert vista.panel_info.resumen == f"Camino más corto: {' → '.join(map(str, camino))}, costo {costo}."
+
+    def test_eliminar_el_destino_calcula_todos(self, vista):
+        vista.ejecutar_dijkstra(1, 6)
+        vista.eliminar_nodo(6)
+        assert vista.panel_info.titulo == f"{panel_vista.DIJKSTRA} desde el nodo 1"
+
+
+class TestExportar:
+    def test_sin_resultado_no_se_puede_exportar(self, vista):
+        assert not vista.panel_info.btn_exportar.isEnabled()
+        vista.ejecutar_bfs(1)
+        assert vista.panel_info.btn_exportar.isEnabled()
+
+    def test_csv(self, ventana, vista, tmp_path, monkeypatch):
+        vista.ejecutar_dijkstra(1)
+        ruta = tmp_path / "pasos.csv"
+        monkeypatch.setattr(QtWidgets.QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (str(ruta), "")))
+        accion(ventana, "Exportar Pasos…").trigger()
+        with open(ruta, encoding="utf-8-sig", newline="") as archivo:
+            filas = list(csv.reader(archivo))
+        assert filas[0] == ["Paso", "Descripción"]
+        assert filas[1] == ["1", vista.pasos[0].descripcion]
+        assert len([fila for fila in filas if len(fila) == 2]) == len(vista.pasos) + 1
+        assert ["Nodo", "Distancia", "Anterior"] in filas
+        assert ["6", "10", "3"] in filas
+
+    def test_texto(self, vista, tmp_path):
+        vista.ejecutar_kruskal()
+        ruta = tmp_path / "pasos.txt"
+        vista.panel_info.guardar(ruta)
+        contenido = ruta.read_text(encoding="utf-8")
+        assert contenido.startswith(f"{panel_vista.KRUSKAL}\nÁrbol de expansión mínima: 7 aristas, peso total 26.\n")
+        assert f"{len(vista.pasos)}. " in contenido
+        assert "Distancias finales" not in contenido
+
+
+def test_traducciones_de_qt_al_espanol(app):
+    traductor = instalar_traducciones(app)
+    try:
+        botones = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.StandardButton.Ok)
+        assert traductor is None or botones.buttons()[0].text() == "Aceptar"
+    finally:
+        if traductor is not None:
+            app.removeTranslator(traductor)
 
 
 class TestBarraDeEstado:

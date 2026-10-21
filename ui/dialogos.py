@@ -1,7 +1,9 @@
 from PyQt6.QtGui import QIntValidator
-from PyQt6.QtWidgets import QDialog, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMessageBox, QPushButton
+from PyQt6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout, QInputDialog, QLabel,
+                             QLineEdit, QMessageBox, QPushButton)
 
 VALOR_MAXIMO = 999999
+TODOS_LOS_NODOS = "Todos los nodos"
 
 
 class DialogoEnteros(QDialog):
@@ -45,6 +47,43 @@ class DialogoArista(DialogoEnteros):
             "Los nodos deben ser enteros positivos y el peso un entero mayor o igual a 0.",
             parent,
         )
+
+
+class DialogoInicioDestino(QDialog):
+    """Elige el nodo inicial y, opcionalmente, un nodo destino."""
+
+    def __init__(self, nodos, sugerido=None, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Camino más corto")
+        self.nodos = list(nodos)
+        opciones = [str(nodo) for nodo in self.nodos]
+        self.cmb_inicio = QComboBox()
+        self.cmb_inicio.addItems(opciones)
+        if sugerido in self.nodos:
+            self.cmb_inicio.setCurrentIndex(self.nodos.index(sugerido))
+        self.cmb_destino = QComboBox()
+        self.cmb_destino.addItems([TODOS_LOS_NODOS, *opciones])
+        botones = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        botones.accepted.connect(self.accept)
+        botones.rejected.connect(self.reject)
+        formulario = QFormLayout(self)
+        formulario.addRow("Nodo inicial:", self.cmb_inicio)
+        formulario.addRow("Nodo destino:", self.cmb_destino)
+        formulario.addRow(botones)
+
+    def eleccion(self):
+        """``(inicio, destino)``; ``destino`` es ``None`` si se eligió "Todos los nodos"."""
+        inicio = self.nodos[self.cmb_inicio.currentIndex()]
+        indice_destino = self.cmb_destino.currentIndex()
+        return inicio, None if indice_destino == 0 else self.nodos[indice_destino - 1]
+
+
+def pedir_inicio_y_destino(nodos, parent=None, sugerido=None):
+    """Devuelve ``(inicio, destino)`` o ``None`` si se cancela."""
+    dialogo = DialogoInicioDestino(nodos, sugerido, parent)
+    if dialogo.exec() == QDialog.DialogCode.Accepted:
+        return dialogo.eleccion()
+    return None
 
 
 def pedir_arista(parent=None):
