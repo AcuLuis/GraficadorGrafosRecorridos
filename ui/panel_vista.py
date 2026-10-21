@@ -137,6 +137,15 @@ class PanelVista(QWidget):
             texto = AYUDA_ARISTA_DESTINO.format(nodo=self.seleccionado)
         self.ayuda.emit(texto)
 
+    def activar_modo_nodo(self):
+        self.rb_dibujar_nodo.setChecked(True)
+
+    def activar_modo_arista(self):
+        self.rb_dibujar_arista.setChecked(True)
+
+    def cancelar_seleccion(self):
+        self.seleccionar(None)
+
     def nombre_arista(self, origen, destino):
         return f"{origen} → {destino}" if self.modelo.dirigido else f"{origen} - {destino}"
 
@@ -242,9 +251,19 @@ class PanelVista(QWidget):
                         lambda: self.modelo.eliminar_arista(origen, destino))
 
     def pedir_nodo_a_eliminar(self):
-        nodo = pedir_nodo("Eliminar Nodo", self)
+        if not self.modelo.grafo.number_of_nodes():
+            QMessageBox.warning(self, "Alerta", "El grafo no tiene nodos.")
+            return
+        nodo = pedir_nodo("Eliminar Nodo", self.modelo.grafo.nodes, self, self.seleccionado)
         if nodo is not None:
             self.eliminar_nodo(nodo)
+
+    def eliminar_seleccionado(self):
+        """Elimina el nodo seleccionado o, si no hay ninguno, pregunta cuál eliminar."""
+        if self.seleccionado is None:
+            self.pedir_nodo_a_eliminar()
+        else:
+            self.eliminar_nodo(self.seleccionado)
 
     def eliminar_nodo(self, nodo):
         self._modificar(f"Eliminar nodo {nodo}", lambda: self.modelo.eliminar_nodo(nodo))
@@ -292,6 +311,18 @@ class PanelVista(QWidget):
         self.panel_info.limpiar()
 
     # Algoritmos
+
+    def pedir_inicio_y_ejecutar(self, ejecutar):
+        """Pide el nodo inicial (sugiere el seleccionado o el último usado) y ejecuta el algoritmo."""
+        if not self.modelo.tiene_aristas():
+            QMessageBox.warning(self, "Advertencia", "No hay nodo o no hay aristas.")
+            return
+        sugerido = self.seleccionado
+        if sugerido is None and self.ultimo_algoritmo and self.ultimo_algoritmo[1]:
+            sugerido = self.ultimo_algoritmo[1][0]
+        inicio = pedir_nodo("Nodo Inicial", self.modelo.grafo.nodes, self, sugerido)
+        if inicio is not None:
+            ejecutar(inicio)
 
     def ejecutar_bfs(self, inicio):
         def calcular():

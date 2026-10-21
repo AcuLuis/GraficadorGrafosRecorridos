@@ -5,7 +5,6 @@ from PyQt6.QtGui import QAction, QKeySequence
 from PyQt6.QtWidgets import QApplication, QDockWidget, QLabel, QMainWindow
 
 from modelo import ModeloGrafo
-from ui.dialogos import pedir_nodo
 from ui.panel_informacion import PanelInformacion
 from ui.panel_vista import BFS, DFS, DIJKSTRA, KRUSKAL, PanelVista
 
@@ -26,13 +25,6 @@ class MainWindow(QMainWindow):
         self._crear_menus()
         self._crear_barra_de_estado()
 
-    def _crear_barra_de_estado(self):
-        self.etiqueta_ayuda = QLabel()
-        self.statusBar().addWidget(self.etiqueta_ayuda, 1)
-        self.panel_vista.ayuda.connect(self.etiqueta_ayuda.setText)
-        self.panel_vista.notificacion.connect(lambda texto: self.statusBar().showMessage(texto, DURACION_AVISO_MS))
-        self.panel_vista.actualizar_ayuda()
-
     def _crear_panel_lateral(self):
         dock = QDockWidget("Panel de Información", self)
         dock.setWidget(self.panel_info)
@@ -43,41 +35,64 @@ class MainWindow(QMainWindow):
 
     def _crear_menus(self):
         vista = self.panel_vista
+        teclas = QKeySequence.StandardKey
+        # PyQt entrega estas acciones a Python: se guardan en la ventana para que no se destruyan.
+        self.accion_deshacer = vista.pila_deshacer.createUndoAction(self, "Deshacer")
+        self.accion_deshacer.setShortcut(teclas.Undo)
+        self.accion_rehacer = vista.pila_deshacer.createRedoAction(self, "Rehacer")
+        self.accion_rehacer.setShortcuts([QKeySequence("Ctrl+Y"), QKeySequence("Ctrl+Shift+Z")])
+
         self._agregar_menu("&Archivo", [
-            ("Guardar Imagen", vista.guardar_imagen),
-            ("Guardar Avance", vista.guardar_json),
-            ("Cargar Avance", vista.cargar_json),
+            ("Guardar Avance", vista.guardar_json, teclas.Save),
+            ("Cargar Avance", vista.cargar_json, teclas.Open),
+            ("Guardar Imagen", vista.guardar_imagen, "Ctrl+E"),
+            None,
+            ("Salir", self.close, "Ctrl+Q"),
         ])
-        menu_editar = self.menuBar().addMenu("&Editar")
-        deshacer = vista.pila_deshacer.createUndoAction(self, "Deshacer")
-        deshacer.setShortcut(QKeySequence.StandardKey.Undo)
-        rehacer = vista.pila_deshacer.createRedoAction(self, "Rehacer")
-        rehacer.setShortcuts([QKeySequence("Ctrl+Y"), QKeySequence("Ctrl+Shift+Z")])
-        menu_editar.addActions([deshacer, rehacer])
+        self._agregar_menu("&Editar", [
+            self.accion_deshacer,
+            self.accion_rehacer,
+            None,
+            ("Modo Nodo", vista.activar_modo_nodo, "N"),
+            ("Modo Arista", vista.activar_modo_arista, "A"),
+            ("Cancelar Selección", vista.cancelar_seleccion, "Esc"),
+            None,
+            ("Eliminar Nodo", vista.eliminar_seleccionado, teclas.Delete),
+            ("Limpiar Grafo", vista.limpiar, "Ctrl+L"),
+        ])
         self._agregar_menu("&Grafos", [
-            ("Grafo de Prueba", vista.cargar_grafo_prueba),
-            ("Recorrido Seleccionado", vista.conservar_recorrido),
+            ("Grafo de Prueba", vista.cargar_grafo_prueba, "Ctrl+T"),
+            ("Recorrido Seleccionado", vista.conservar_recorrido, "Ctrl+R"),
         ])
         self._agregar_menu("&Algoritmos", [
-            (BFS, self._con_nodo_inicial(vista.ejecutar_bfs)),
-            (KRUSKAL, vista.ejecutar_kruskal),
-            (DFS, self._con_nodo_inicial(vista.ejecutar_dfs)),
-            (DIJKSTRA, self._con_nodo_inicial(vista.ejecutar_dijkstra)),
+            (BFS, lambda *_: vista.pedir_inicio_y_ejecutar(vista.ejecutar_bfs), "Ctrl+1"),
+            (DFS, lambda *_: vista.pedir_inicio_y_ejecutar(vista.ejecutar_dfs), "Ctrl+2"),
+            (KRUSKAL, vista.ejecutar_kruskal, "Ctrl+3"),
+            (DIJKSTRA, lambda *_: vista.pedir_inicio_y_ejecutar(vista.ejecutar_dijkstra), "Ctrl+4"),
         ])
 
-    def _agregar_menu(self, titulo, acciones):
+    def _agregar_menu(self, titulo, elementos):
+        """Crea un menú. Cada elemento es ``None`` (separador), una ``QAction`` o ``(texto, función, atajo)``."""
         menu = self.menuBar().addMenu(titulo)
-        for texto, funcion in acciones:
-            accion = QAction(texto, self)
-            accion.triggered.connect(funcion)
-            menu.addAction(accion)
+        for elemento in elementos:
+            if elemento is None:
+                menu.addSeparator()
+                continue
+            if not isinstance(elemento, QAction):
+                texto, funcion, atajo = elemento
+                accion = QAction(texto, self)
+                accion.setShortcut(QKeySequence(atajo))
+                accion.triggered.connect(funcion)
+                elemento = accion
+            menu.addAction(elemento)
+        return menu
 
-    def _con_nodo_inicial(self, ejecutar):
-        def pedir_y_ejecutar(*_):
-            inicio = pedir_nodo("Nodo Inicial", self)
-            if inicio is not None:
-                ejecutar(inicio)
-        return pedir_y_ejecutar
+    def _crear_barra_de_estado(self):
+        self.etiqueta_ayuda = QLabel()
+        self.statusBar().addWidget(self.etiqueta_ayuda, 1)
+        self.panel_vista.ayuda.connect(self.etiqueta_ayuda.setText)
+        self.panel_vista.notificacion.connect(lambda texto: self.statusBar().showMessage(texto, DURACION_AVISO_MS))
+        self.panel_vista.actualizar_ayuda()
 
 
 def main():

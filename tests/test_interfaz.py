@@ -295,6 +295,92 @@ class TestArchivos:
         assert vista.rb_dirigido.isChecked()
 
 
+def accion(ventana, texto):
+    acciones = [accion for menu in ventana.menuBar().findChildren(QtWidgets.QMenu) for accion in menu.actions()]
+    return next(accion for accion in acciones if accion.text() == texto)
+
+
+@pytest.fixture
+def nodo_elegido(monkeypatch):
+    """Simula la lista desplegable de nodos; guarda lo que se mostró y responde ``valor`` (``None`` = cancelar)."""
+    respuesta = {"valor": "3", "opciones": None, "indice": None}
+
+    def get_item(_padre, _titulo, _etiqueta, opciones, indice, _editable):
+        respuesta["opciones"], respuesta["indice"] = opciones, indice
+        return (respuesta["valor"] or "", respuesta["valor"] is not None)
+
+    monkeypatch.setattr(QtWidgets.QInputDialog, "getItem", staticmethod(get_item))
+    return respuesta
+
+
+class TestNodoInicial:
+    def test_lista_con_los_nodos_existentes(self, ventana, vista, nodo_elegido):
+        accion(ventana, panel_vista.BFS).trigger()
+        assert nodo_elegido["opciones"] == [str(nodo) for nodo in vista.modelo.grafo.nodes]
+        assert vista.panel_info.texto().startswith("PASOS BFS:\nVa de nodo 3")
+
+    def test_sugiere_el_nodo_seleccionado(self, ventana, vista, nodo_elegido):
+        vista.seleccionar(5)
+        accion(ventana, panel_vista.DIJKSTRA).trigger()
+        assert nodo_elegido["opciones"][nodo_elegido["indice"]] == "5"
+
+    def test_sugiere_el_ultimo_inicio(self, ventana, vista, nodo_elegido):
+        vista.ejecutar_dfs(7)
+        accion(ventana, panel_vista.DFS).trigger()
+        assert nodo_elegido["opciones"][nodo_elegido["indice"]] == "7"
+
+    def test_cancelar(self, ventana, vista, nodo_elegido):
+        nodo_elegido["valor"] = None
+        accion(ventana, panel_vista.BFS).trigger()
+        assert vista.lbl_algoritmo.text() == ""
+
+    def test_sin_aristas_no_pregunta(self, ventana, vista, nodo_elegido, avisos, confirmar):
+        vista.limpiar()
+        accion(ventana, panel_vista.BFS).trigger()
+        assert nodo_elegido["opciones"] is None
+        assert avisos == ["No hay nodo o no hay aristas."]
+
+
+class TestAtajos:
+    @pytest.mark.parametrize("texto, atajo", [
+        ("Guardar Avance", "Ctrl+S"), ("Cargar Avance", "Ctrl+O"), ("Guardar Imagen", "Ctrl+E"),
+        ("Modo Nodo", "N"), ("Modo Arista", "A"), ("Cancelar Selección", "Esc"),
+        ("Eliminar Nodo", "Del"), ("Limpiar Grafo", "Ctrl+L"),
+        (panel_vista.BFS, "Ctrl+1"), (panel_vista.DFS, "Ctrl+2"),
+        (panel_vista.KRUSKAL, "Ctrl+3"), (panel_vista.DIJKSTRA, "Ctrl+4"),
+    ])
+    def test_atajos_definidos(self, ventana, texto, atajo):
+        assert accion(ventana, texto).shortcut().toString() == atajo
+
+    def test_deshacer_y_rehacer(self, ventana, vista):
+        vista.eliminar_nodo(8)
+        deshacer = accion(ventana, "Deshacer Eliminar nodo 8")
+        assert deshacer.shortcut().toString() == "Ctrl+Z"
+        deshacer.trigger()
+        assert 8 in vista.modelo.grafo
+        accion(ventana, "Rehacer Eliminar nodo 8").trigger()
+        assert 8 not in vista.modelo.grafo
+
+    def test_suprimir_elimina_el_nodo_seleccionado(self, ventana, vista):
+        vista.seleccionar(4)
+        accion(ventana, "Eliminar Nodo").trigger()
+        assert 4 not in vista.modelo.grafo
+        assert vista.seleccionado is None
+
+    def test_suprimir_sin_seleccion_pregunta(self, ventana, vista, nodo_elegido):
+        accion(ventana, "Eliminar Nodo").trigger()
+        assert 3 not in vista.modelo.grafo
+
+    def test_modos_y_cancelar_seleccion(self, ventana, vista):
+        accion(ventana, "Modo Arista").trigger()
+        assert vista.rb_dibujar_arista.isChecked()
+        vista.seleccionar(2)
+        accion(ventana, "Cancelar Selección").trigger()
+        assert vista.seleccionado is None
+        accion(ventana, "Modo Nodo").trigger()
+        assert vista.rb_dibujar_nodo.isChecked()
+
+
 class TestBarraDeEstado:
     def test_selector_de_tipo_visible(self, vista):
         assert vista.grupo_tipo.isVisibleTo(vista)

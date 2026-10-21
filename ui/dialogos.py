@@ -47,16 +47,6 @@ class DialogoArista(DialogoEnteros):
         )
 
 
-class DialogoNodo(DialogoEnteros):
-    def __init__(self, titulo, parent=None):
-        super().__init__(
-            titulo,
-            [("Ingresa ID del Nodo:", 1)],
-            "Ingrese un ID de nodo válido (entero positivo).",
-            parent,
-        )
-
-
 def pedir_arista(parent=None):
     """Devuelve ``(origen, destino, peso)`` o ``None`` si se cancela."""
     dialogo = DialogoArista(parent)
@@ -71,9 +61,10 @@ def pedir_peso(parent, etiqueta, valor=1):
     return peso if aceptado else None
 
 
-def pedir_nodo(titulo, parent=None):
-    """Devuelve el ID de nodo ingresado o ``None`` si se cancela."""
-    dialogo = DialogoNodo(titulo, parent)
-    if dialogo.exec() == QDialog.DialogCode.Accepted:
-        return dialogo.valores[0]
-    return None
+def pedir_nodo(titulo, nodos, parent=None, sugerido=None):
+    """Muestra una lista desplegable con ``nodos`` y devuelve el elegido, o ``None`` si se cancela."""
+    nodos = list(nodos)
+    opciones = [str(nodo) for nodo in nodos]
+    indice = nodos.index(sugerido) if sugerido in nodos else 0
+    texto, aceptado = QInputDialog.getItem(parent, titulo, "Nodo:", opciones, indice, False)
+    return nodos[opciones.index(texto)] if aceptado else None
