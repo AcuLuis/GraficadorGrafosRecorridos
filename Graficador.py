@@ -9,6 +9,7 @@ from Utilidades import Operaciones as op
 from collections import deque
 from DialogNodo import *
 import json
+from pathlib import Path
 
 centralWidget = None
 panel = None
@@ -18,6 +19,7 @@ posX = None
 posY = None
 TipoGrafo="NoDirigido"
 verifica = None
+CARPETA_DATOS = Path(__file__).resolve().parent
 class Lienzo:
     def __init__(self, main_window):
         self.main_window = main_window    
@@ -382,7 +384,7 @@ class PanelVista(QWidget):
     def DibujaPrueba(self):
         self.LimpiarLienzo()
         self.lienzo.edge_colors.clear()
-        with open("Nodos.txt") as archivo:
+        with open(CARPETA_DATOS / "Nodos.txt", encoding="utf-8") as archivo:
             lineas = archivo.readlines()
             for linea in lineas:
                 partes = linea.split(", ")
@@ -393,7 +395,7 @@ class PanelVista(QWidget):
                     self.lienzo.graph.add_node(node_id)
                     self.lienzo.pos[node_id] = (posiX, posiY)
                     self.lienzo.DibujarGrafo()
-        with open("Aristas.txt") as aristas:
+        with open(CARPETA_DATOS / "Aristas.txt", encoding="utf-8") as aristas:
             lineas = aristas.readlines()
             for linea in lineas:
                 partes = linea.split(", ")
@@ -618,7 +620,8 @@ class Panel(QWidget):
         font1.setPointSize(12)  # Tamaño de la fuente
         content_label.setFont(font1)
         self.scrollarea.setWidget(content_label)
-app = QApplication([])
-window = MainWindow()
-window.show()
-app.exec_()
+if __name__ == "__main__":
+    app = QApplication([])
+    window = MainWindow()
+    window.show()
+    app.exec_()
