@@ -6,9 +6,8 @@ from matplotlib.figure import Figure
 from matplotlib.patches import Rectangle
 from Arista import MiDialogo
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
-from Utilidades import Operaciones as op
-from collections import deque
-import heapq
+import algoritmos
+import math
 from DialogNodo import *
 import json
 import ast
@@ -174,6 +173,8 @@ class Lienzo:
         self.pos = {}
         self.edge_colors.clear()
         self.DibujarGrafo()
+def textoPasos(titulo, aristas):
+    return titulo + "\n" + "".join(f"Va de nodo {arista[0]} -> nodo {arista[1]}\n" for arista in aristas)
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -433,139 +434,47 @@ class PanelVista(QWidget):
         return len(self.lienzo.getNodos()) > 0
     def hayAristas(self):
         return len(self.lienzo.getAristas()) > 0
-    def nodoExiste(self, nodo):
-        if self.hayNodos() and nodo not in self.lienzo.graph:
-            QMessageBox.warning(self, "Advertencia", f"El nodo {nodo} no existe en el grafo.")
-            return False
-        return True
-    def BFS(self,inicio):
-        if not self.nodoExiste(inicio):
-            return
-        content="PASOS BFS:\n"
-        if self.hayAristas() and self.hayNodos():
-            global verifica
-            verifica =True
-            self.lienzo.ReiniciarColores()
-            aristas=[]
-            visited = {inicio}
-            queue = deque([inicio])
-            while queue:
-                node = queue.popleft()
-                for neighbor in self.lienzo.graph.neighbors(node):
-                    if neighbor not in visited:
-                        visited.add(neighbor)
-                        aristas.append((node, neighbor))
-                        content += f"Va de nodo {node} -> nodo {neighbor}\n"
-                        queue.append(neighbor)
-            global panel
-            panel.setContent(content)
-            self.lienzo.setAristaColor(aristas,"blue")
-            self.lblTipo.setText("BFS-Busqueda en anchura")
-        else:
+    def ejecutarAlgoritmo(self, nombre, calcular):
+        if not (self.hayAristas() and self.hayNodos()):
             QMessageBox.warning(self, "Advertencia", "No hay nodo o no hay aristas.")
+            return
+        try:
+            aristas, content = calcular()
+        except ValueError as error:
+            QMessageBox.warning(self, "Advertencia", str(error))
+            return
+        self.lienzo.ReiniciarColores()
+        self.lienzo.setAristaColor([arista[:2] for arista in aristas], "blue")
+        panel.setContent(content)
+        self.lblTipo.setText(nombre)
+    def BFS(self, inicio):
+        def calcular():
+            aristas = algoritmos.bfs(self.lienzo.graph, inicio)
+            return aristas, textoPasos("PASOS BFS:", aristas)
+        self.ejecutarAlgoritmo("BFS-Busqueda en anchura", calcular)
     def KRUSKAL(self):
-        if self.lienzo.graph.is_directed():
-            QMessageBox.warning(self, "Advertencia", "Kruskal solo aplica a grafos no dirigidos.")
-            return
-        content="Pasos Kruskal:\n"
-        if self.hayAristas() and self.hayNodos():
-            global verifica
-            verifica =True
-            self.lienzo.ReiniciarColores()
-            grafo = self.lienzo.getPesos()
-            grafoSorted = op.getSortAristas(grafo)
-            conjunto_nodos = {nodo: {nodo} for nodo in self.lienzo.getNodos()}
-            camino = []
-            peso_total = 0
-            for arista, peso in grafoSorted:
-                nodo1, nodo2 = arista
-                conjunto_nodo1 = conjunto_nodos[nodo1]
-                conjunto_nodo2 = conjunto_nodos[nodo2]
-                if conjunto_nodo1 != conjunto_nodo2:
-                    nodo1=str(arista[0])
-                    nodo2=str(arista[1])
-                    step=str(f"Va de nodo {nodo1} -> nodo {nodo2}\n")
-                    content=content+step
-                    camino.append(arista)
-                    peso_total += peso
-                    nuevo_conjunto = conjunto_nodo1.union(conjunto_nodo2)
-                    for nodo in nuevo_conjunto:
-                        conjunto_nodos[nodo] = nuevo_conjunto
-            content += f"\nPeso total: {peso_total}\n"
-            self.lienzo.setAristaColor(camino, "blue")
-            panel.setContent(content)
-            self.lblTipo.setText("Kruskal-Arbol de expansión mínima")
-        else:
-            QMessageBox.warning(self, "Advertencia", "No hay nodo o no hay aristas.")
+        def calcular():
+            aristas = algoritmos.kruskal(self.lienzo.graph)
+            peso_total = sum(peso for _, _, peso in aristas)
+            return aristas, textoPasos("PASOS KRUSKAL:", aristas) + f"\nPeso total: {peso_total}\n"
+        self.ejecutarAlgoritmo("Kruskal-Arbol de expansión mínima", calcular)
     def DFS(self, inicio):
-        if not self.nodoExiste(inicio):
-            return
-        nodosVistados=[]
-        content="PASOS DFS:\n"
-        if self.hayAristas() and self.hayNodos():
-            global verifica
-            verifica =True
-            self.lienzo.ReiniciarColores()
-            def dfs_util(nodo):
-                visitado.add(nodo)
-
-                vecinos = list(self.lienzo.graph.neighbors(nodo))
-                for veci in vecinos:
-                    if veci not in visitado:
-                        arista = (nodo, veci)
-                        nodosVistados.append(arista)
-                        dfs_util(veci)
-            visitado = set()
-            dfs_util(inicio)
-            self.lienzo.setAristaColor(nodosVistados, "blue")
-            for tupla in nodosVistados:
-                nodo1=str(tupla[0])
-                nodo2=str(tupla[1])
-                step=str(f"Va de nodo {nodo1} -> nodo {nodo2}\n")
-                content=content+step
-            panel.setContent(content)
-            self.lblTipo.setText("DFS-Busqueda en profundidad")
-        else:
-            QMessageBox.warning(self, "Advertencia", "No hay nodo o no hay aristas.")
+        def calcular():
+            aristas = algoritmos.dfs(self.lienzo.graph, inicio)
+            return aristas, textoPasos("PASOS DFS:", aristas)
+        self.ejecutarAlgoritmo("DFS-Busqueda en profundidad", calcular)
     def DIJKSTRA(self, inicio):
-        if not self.nodoExiste(inicio):
-            return
-        if self.hayAristas() and self.hayNodos():
-            global verifica
-            verifica = True
-            self.lienzo.ReiniciarColores()
-            grafo = self.lienzo.graph
-            distancias = {node: float('inf') for node in grafo.nodes()}
-            distancias[inicio] = 0
-            visitado = set()
-            padre = {}
-            cola = [(0, inicio)]
-            while cola:
-                distancia, nodo = heapq.heappop(cola)
-                if nodo in visitado:
-                    continue
-                visitado.add(nodo)
-                for veci in grafo.neighbors(nodo):
-                    nueva_distancia = distancia + grafo[nodo][veci].get('weight', 1)
-                    if nueva_distancia < distancias[veci]:
-                        distancias[veci] = nueva_distancia
-                        padre[veci] = nodo
-                        heapq.heappush(cola, (nueva_distancia, veci))
+        def calcular():
+            distancias, aristas = algoritmos.dijkstra(self.lienzo.graph, inicio)
             content = "PASOS DIJKSTRA:\n"
-            aristas = []
-            for nodo_destino, nodo_origen in padre.items():
-                aristas.append((nodo_origen, nodo_destino))
-                peso = grafo[nodo_origen][nodo_destino].get('weight', 1)
-                content += f"Va de nodo {nodo_origen} -> nodo {nodo_destino} (Peso: {peso})\n"
+            for origen, destino, peso in aristas:
+                content += f"Va de nodo {origen} -> nodo {destino} (Peso: {peso})\n"
             content += f"\nDISTANCIAS DESDE {inicio}:\n"
             for nodo in sorted(distancias):
                 distancia = distancias[nodo]
-                content += f"Nodo {nodo}: {distancia if distancia != float('inf') else 'inalcanzable'}\n"
-            self.lienzo.setAristaColor(aristas, "blue")
-            panel.setContent(content)
-            self.lblTipo.setText("DIJSKTRA - Camino más corto")
-        else:
-            QMessageBox.warning(self, "Advertencia", "No hay nodo o no hay aristas.")
+                content += f"Nodo {nodo}: {distancia if distancia != math.inf else 'inalcanzable'}\n"
+            return aristas, content
+        self.ejecutarAlgoritmo("DIJSKTRA - Camino más corto", calcular)
 
     def seleccion_recorrido(self):
         if self.hayAristas() and self.hayNodos():
