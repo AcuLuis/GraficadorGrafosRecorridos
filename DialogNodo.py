@@ -8,22 +8,21 @@ class MiDialogoNodoEliminar(QDialog):
         layout = QHBoxLayout(self)
         label1 = QLabel('Ingresa ID del Nodo:')
         self.edit1 = QLineEdit(self)
-        self.edit1.setValidator(QIntValidator())
+        self.edit1.setValidator(QIntValidator(1, 999999))
         layout.addWidget(label1)
         layout.addWidget(self.edit1)
         btnAceptar = QPushButton('Aceptar', self)
         btnAceptar.clicked.connect(self.aceptar_valores)
         layout.addWidget(btnAceptar)
     def aceptar_valores(self):
-        valor1 = self.edit1.text()
-        self.valor1 = valor1
-        if self.valor1 != '':
+        if self.edit1.hasAcceptableInput():
+            self.valor1 = int(self.edit1.text())
             self.accept()
         else:
             alerta = QMessageBox()
             alerta.setIcon(QMessageBox.Icon.Warning)
             alerta.setText("Error")
-            alerta.setInformativeText("Ingrese los datos correctos.")
+            alerta.setInformativeText("Ingrese un ID de nodo válido (entero positivo).")
             alerta.setWindowTitle("Alerta")
             alerta.exec()
 class InicioNodo(QDialog):
@@ -34,21 +33,20 @@ class InicioNodo(QDialog):
         layout = QHBoxLayout(self)
         label1 = QLabel('Ingresa ID del Nodo:')
         self.edit1 = QLineEdit(self)
-        self.edit1.setValidator(QIntValidator())
+        self.edit1.setValidator(QIntValidator(1, 999999))
         layout.addWidget(label1)
         layout.addWidget(self.edit1)
         btnAceptar = QPushButton('Aceptar', self)
         btnAceptar.clicked.connect(self.aceptar_valores)
         layout.addWidget(btnAceptar)
     def aceptar_valores(self):
-        valor1 = self.edit1.text()
-        self.valor1 = valor1
-        if self.valor1 != '':
+        if self.edit1.hasAcceptableInput():
+            self.valor1 = int(self.edit1.text())
             self.accept()
         else:
             alerta = QMessageBox()
             alerta.setIcon(QMessageBox.Icon.Warning)
             alerta.setText("Error")
-            alerta.setInformativeText("Ingrese los datos correctos.")
+            alerta.setInformativeText("Ingrese un ID de nodo válido (entero positivo).")
             alerta.setWindowTitle("Alerta")
             alerta.exec()

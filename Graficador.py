@@ -43,7 +43,9 @@ class Lienzo:
         if(tipo=="NoDirigido"):
             self.graph=nx.Graph()
     def DibujarArista(self, posNodo1, posNodo2,peso=1):
-        if posNodo1 in self.graph.nodes() and posNodo2 in self.graph.nodes():
+        if posNodo1 == posNodo2:
+            QMessageBox.warning(self.main_window, "Alerta", "Una arista debe unir dos nodos distintos.")
+        elif posNodo1 in self.graph.nodes() and posNodo2 in self.graph.nodes():
             self.graph.add_edge(posNodo1, posNodo2,weight=peso)
             self.edge_colors[(posNodo1, posNodo2)] = "black"
             self.DibujarGrafo()
@@ -227,58 +229,25 @@ class MainWindow(QMainWindow):
         centralWidget.GuardarJson()
     def CargarJson(self):
         centralWidget.CargarJson()
-    def Alertas(self, mensaje):
-        alerta = QMessageBox()
-        alerta.setIcon(QMessageBox.Icon.Warning)
-        if mensaje == "Cambiando tipo de grafo.":
-            alerta.setText('Se borrará tu avance. \n ¿Estás seguro de continuar?')
-            alerta.setWindowTitle('Alerta')
-            btnSi = alerta.addButton('Sí', QMessageBox.ButtonRole.YesRole)
-            btnNo = alerta.addButton('Cancelar', QMessageBox.ButtonRole.NoRole)
-            alerta.exec()
-            if alerta.clickedButton() == btnSi:
-                self.Limpiar()
-                return True
-            elif alerta.clickedButton() == btnNo:
-                return False
-        else:
-            alerta.setText("Elemento no encontrado")
-            alerta.setInformativeText(mensaje)
-            alerta.setWindowTitle("Alerta")
-            alerta.exec()
+    def pedirNodoInicio(self):
+        dialogNodo = InicioNodo(self)
+        if dialogNodo.exec() == QDialog.DialogCode.Accepted:
+            return dialogNodo.valor1
+        return None
     def BFS(self):
-        print("BFS ENTRE MAIN")
-        dialogNodo=InicioNodo()
-        resultado = dialogNodo.exec()
-        if resultado == QDialog.DialogCode.Accepted:
-            valor1 = dialogNodo.valor1
-            print(valor1)
-            if valor1 != None :
-                centralWidget.BFS(int(valor1))
-            else:
-                self.Alertas("Ingresar valores correctos")
+        inicio = self.pedirNodoInicio()
+        if inicio is not None:
+            centralWidget.BFS(inicio)
     def KRUSKAL(self):
         centralWidget.KRUSKAL()
     def DFS(self):
-        dialogNodo=InicioNodo()
-        resultado = dialogNodo.exec()
-        if resultado == QDialog.DialogCode.Accepted:
-            valor1 = dialogNodo.valor1
-            print(valor1)
-            if valor1 != None :
-                centralWidget.DFS(int(valor1))
-            else:
-                self.Alertas("Ingresar valores correctos")
+        inicio = self.pedirNodoInicio()
+        if inicio is not None:
+            centralWidget.DFS(inicio)
     def DIJSKTRA(self):
-        dialogNodo=InicioNodo()
-        resultado = dialogNodo.exec()
-        if resultado == QDialog.DialogCode.Accepted:
-            valor1 = dialogNodo.valor1
-            print(valor1)
-            if valor1 != None :
-                centralWidget.DIJKSTRA(int(valor1))
-            else:
-                self.Alertas("Ingresar valores correctos")
+        inicio = self.pedirNodoInicio()
+        if inicio is not None:
+            centralWidget.DIJKSTRA(inicio)
     def dibujaPruebaGrafo(self):
         centralWidget.DibujaPrueba()
     def seleccion(self):
@@ -432,18 +401,9 @@ class PanelVista(QWidget):
                 self.lienzo.fig.canvas.mpl_disconnect(self.lienzo.cid)
                 self.lienzo.cid = self.lienzo.fig.canvas.mpl_connect('button_press_event', self.lienzo.MouseClick)
     def PideNodos(self):
-        dialogo = MiDialogo()
-        resultado = dialogo.exec()
-        if resultado == QDialog.DialogCode.Accepted:
-            valor1 = dialogo.valor1
-            valor2 = dialogo.valor2
-            valor3 = dialogo.valor3
-            print(self.lienzo.graph.nodes())
-            print(self.lienzo.graph.edges())
-            if valor1 != None and valor2 != None and valor3 != None:
-                self.lienzo.DibujarArista(int(valor1), int(valor2),int(valor3))
-            else:
-                self.lienzo.Alertas("Ingresar valores correctos")
+        dialogo = MiDialogo(self)
+        if dialogo.exec() == QDialog.DialogCode.Accepted:
+            self.lienzo.DibujarArista(dialogo.valor1, dialogo.valor2, dialogo.valor3)
     def LimpiarLienzo(self):
         self.lblTipo.setText("")
         self.lienzo.Limpiar()
@@ -461,7 +421,14 @@ class PanelVista(QWidget):
         return len(self.lienzo.getNodos()) > 0
     def hayAristas(self):
         return len(self.lienzo.getAristas()) > 0
+    def nodoExiste(self, nodo):
+        if self.hayNodos() and nodo not in self.lienzo.graph:
+            QMessageBox.warning(self, "Advertencia", f"El nodo {nodo} no existe en el grafo.")
+            return False
+        return True
     def BFS(self,inicio):
+        if not self.nodoExiste(inicio):
+            return
         content="PASOS BFS:\n"
         if self.hayAristas() and self.hayNodos():
             global verifica
@@ -522,6 +489,8 @@ class PanelVista(QWidget):
         else:
             QMessageBox.warning(self, "Advertencia", "No hay nodo o no hay aristas.")
     def DFS(self, inicio):
+        if not self.nodoExiste(inicio):
+            return
         nodosVistados=[]
         content="PASOS DFS:\n"
         if self.hayAristas() and self.hayNodos():
@@ -549,6 +518,8 @@ class PanelVista(QWidget):
         else:
             QMessageBox.warning(self, "Advertencia", "No hay nodo o no hay aristas.")
     def DIJKSTRA(self, inicio):
+        if not self.nodoExiste(inicio):
+            return
         if self.hayAristas() and self.hayNodos():
             global verifica
             verifica = True
