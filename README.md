@@ -4,8 +4,10 @@
 Este proyecto es una aplicación gráfica desarrollada en Python utilizando las bibliotecas PyQt6 y NetworkX. La aplicación permite visualizar y manipular grafos y ejecutar algoritmos comunes sobre ellos, como BFS, DFS, Kruskal y Dijkstra.
 
 ## Características principales
-- **Interfaz gráfica intuitiva**: La aplicación cuenta con una interfaz gráfica que permite a los usuarios dibujar nodos y aristas con peso.
-- **Grafos dirigidos y no dirigidos**: Desde la interfaz se trabaja con grafos no dirigidos. Los grafos dirigidos se pueden cargar desde un archivo JSON (`"graph_type": "Directed"`).
+- **Edición directa con el mouse**: crear nodos con un clic, unirlos con aristas haciendo clic en el origen y el destino, arrastrarlos para moverlos y usar el clic derecho para editar pesos o eliminar elementos.
+- **Grafos dirigidos y no dirigidos**: se elige el tipo desde la cabecera de la ventana.
+- **Deshacer y rehacer**: todas las ediciones del grafo se pueden deshacer (Ctrl+Z) y rehacer (Ctrl+Y).
+- **Resultados que se actualizan solos**: al editar el grafo se vuelve a calcular el último algoritmo ejecutado.
 
 ## Algoritmos de grafos
 La aplicación implementa varios algoritmos de grafos, incluyendo:
@@ -19,9 +21,6 @@ Los grafos pueden ser guardados y cargados en formato JSON, lo que permite a los
 
 ## Exportación de imágenes
 Los grafos pueden ser exportados como imágenes en formato PNG.
-
-## Manipulación de nodos y aristas
-Los usuarios pueden agregar y eliminar nodos, agregar aristas con peso y resaltar en azul el recorrido calculado por cada algoritmo.
 
 ## Requisitos
 - **Python 3.9 o superior**
@@ -48,25 +47,39 @@ modelo/grafo.py          ModeloGrafo: nodos, posiciones, colores, guardado y car
 ui/                      Interfaz PyQt6
   ventana_principal.py   MainWindow: menús y panel lateral
   panel_vista.py         PanelVista: controles de edición y ejecución de algoritmos
-  lienzo.py              Lienzo: dibuja el grafo con matplotlib y emite los clics
+  lienzo.py              Lienzo: dibuja el grafo y traduce el mouse en acciones sobre nodos y aristas
   panel_informacion.py   PanelInformacion: pasos del último algoritmo
-  dialogos.py            Diálogos para ingresar nodos y aristas
+  comandos.py            Comandos de deshacer/rehacer (QUndoStack)
+  dialogos.py            Diálogos para elegir nodos e ingresar aristas y pesos
 datos/                   Grafo de prueba (Nodos.txt, Aristas.txt)
 tests/                   Pruebas con pytest
 ```
 
 ## Uso
-- **Dibujar nodos**: Selecciona la opción "Dibujar Nodo" y haz clic en el lienzo para agregar nodos.
+La barra de estado, en la parte inferior de la ventana, muestra en todo momento qué hace cada clic en el modo actual.
 
-- **Dibujar aristas**: Selecciona la opción "Dibujar Arista", pulsa "Ingresar Puntos" e indica el nodo padre, el nodo hijo y el peso (entero no negativo).
+- **Dibujar nodos**: con "Dibujar Nodo" activo, haz clic en un espacio vacío del lienzo. Haz clic en un nodo para seleccionarlo (se resalta en naranja) y arrástralo para moverlo.
+- **Dibujar aristas**: con "Dibujar Arista" activo, haz clic en el nodo de origen y luego en el de destino, e indica el peso (entero no negativo). Si la arista ya existe, se actualiza su peso. También puedes usar "Ingresar Arista…" para escribir los nodos y el peso.
+- **Editar y eliminar**: clic derecho sobre un nodo para eliminarlo o ejecutar un algoritmo desde él; clic derecho sobre una arista para editar su peso o eliminarla.
+- **Ejecutar algoritmos**: elige un algoritmo del menú "Algoritmos". BFS, DFS y Dijkstra piden el nodo inicial en una lista desplegable, que sugiere el nodo seleccionado o el último usado.
+- **Recorrido seleccionado**: en el menú "Grafos", conserva solo las aristas del último recorrido calculado.
+- **Grafo de prueba**: en el menú "Grafos", carga el grafo definido en `datos/Nodos.txt` y `datos/Aristas.txt`.
+- **Guardar y cargar grafos**: opciones del menú "Archivo", en formato JSON.
+- **Exportar imagen**: "Guardar Imagen" exporta el grafo como PNG.
 
-- **Ejecutar algoritmos**: Selecciona un algoritmo del menú "Algoritmos" y sigue las instrucciones para ejecutarlo.
+### Atajos de teclado
 
-- **Grafo de prueba**: En el menú "Grafos" la opción "Grafo de Prueba" carga el grafo definido en `datos/Nodos.txt` y `datos/Aristas.txt`.
-
-- **Guardar y cargar grafos**: Utiliza las opciones del menú "Archivo" para guardar o cargar un grafo en formato JSON.
-
-- **Exportar imagen**: Utiliza la opción "Guardar Imagen" para exportar el grafo como una imagen PNG.
+| Acción | Atajo |
+| --- | --- |
+| Guardar avance / Cargar avance | Ctrl+S / Ctrl+O |
+| Guardar imagen | Ctrl+E |
+| Deshacer / Rehacer | Ctrl+Z / Ctrl+Y |
+| Modo nodo / Modo arista | N / A |
+| Cancelar la selección | Esc |
+| Eliminar el nodo seleccionado | Supr |
+| Limpiar el grafo | Ctrl+L |
+| Grafo de prueba / Recorrido seleccionado | Ctrl+T / Ctrl+R |
+| BFS / DFS / Kruskal / Dijkstra | Ctrl+1 / Ctrl+2 / Ctrl+3 / Ctrl+4 |
 
 ## Ejecución
 Para ejecutar la aplicación, ejecuta el archivo principal:
