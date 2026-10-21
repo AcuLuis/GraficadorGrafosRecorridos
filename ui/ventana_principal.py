@@ -55,6 +55,8 @@ class MainWindow(QMainWindow):
                 app.setStyle(app.property(PROPIEDAD_ESTILO_ORIGINAL))
                 app.setPalette(app.style().standardPalette())
             app.setProperty(CLAVE_TEMA_OSCURO, oscuro)
+            # Al cambiar el estilo la barra de estado vuelve a mostrar la ayuda; sin esto se encimaría con el aviso.
+            self.statusBar().clearMessage()
         tema = TEMAS["oscuro" if oscuro else "claro"]
         self.dock.setStyleSheet(f"QDockWidget::title {{ background: {tema['panel']}; }}")
         self.panel_vista.aplicar_tema(tema)

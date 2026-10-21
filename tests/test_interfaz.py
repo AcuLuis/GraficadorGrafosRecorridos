@@ -748,6 +748,15 @@ class TestTema:
         finally:
             ventana.aplicar_tema(False, guardar=False)
 
+    def test_cambiar_tema_borra_el_aviso_pendiente(self, ventana, vista):
+        vista.eliminar_nodo(8)
+        assert ventana.statusBar().currentMessage() == "Eliminar nodo 8"
+        ventana.aplicar_tema(True, guardar=False)
+        try:
+            assert ventana.statusBar().currentMessage() == ""
+        finally:
+            ventana.aplicar_tema(False, guardar=False)
+
     def test_abrir_no_guarda_preferencias(self, ventana):
         assert ventana.configuracion.allKeys() == []
 
