@@ -12,9 +12,10 @@ COLORES = {
     "recorrido": "blue",
     "examinada": "#d62728",
     "descartada": "#a0a0a0",
+    "ciclo": "#9467bd",
 }
-CLAVES_DE_ARISTA = {"arista", "recorrido", "examinada", "descartada"}
-COLORES_DESTACADOS = {COLORES["recorrido"], COLORES["examinada"]}
+CLAVES_DE_ARISTA = {"arista", "recorrido", "examinada", "descartada", "ciclo"}
+COLORES_DESTACADOS = {COLORES["recorrido"], COLORES["examinada"], COLORES["ciclo"]}
 
 LEYENDAS = {
     "bfs": [("actual", "Nodo actual"), ("espera", "En la cola"), ("visitado", "Procesado"),
@@ -23,8 +24,19 @@ LEYENDAS = {
             ("examinada", "Arista revisada"), ("recorrido", "Arista del recorrido")],
     "kruskal": [("visitado", "Nodo en el árbol"), ("examinada", "Arista revisada"),
                 ("recorrido", "Arista del árbol"), ("descartada", "Descartada (ciclo)")],
+    "prim": [("actual", "Nodo agregado"), ("espera", "Candidato"), ("visitado", "Nodo en el árbol"),
+             ("examinada", "Arista revisada"), ("recorrido", "Arista del árbol"),
+             ("descartada", "Descartada (ya en el árbol)")],
     "dijkstra": [("actual", "Nodo actual"), ("espera", "En la cola de prioridad"), ("visitado", "Distancia fijada"),
                  ("examinada", "Arista revisada"), ("recorrido", "Arista de camino mínimo")],
+    "bellman_ford": [("actual", "Nodo que mejora a un vecino"), ("visitado", "Alcanzado"),
+                     ("examinada", "Arista que mejora una distancia"), ("recorrido", "Arista de camino mínimo"),
+                     ("ciclo", "Ciclo negativo")],
+    "topologico": [("actual", "Nodo tomado"), ("espera", "En la cola (sin entradas pendientes)"),
+                   ("visitado", "Ya ordenado"), ("examinada", "Arista revisada"), ("recorrido", "Arista procesada"),
+                   ("ciclo", "Ciclo")],
+    "ciclos": [("actual", "Nodo actual"), ("espera", "En el camino actual"), ("visitado", "Terminado"),
+               ("examinada", "Arista revisada"), ("recorrido", "Arista del recorrido"), ("ciclo", "Ciclo encontrado")],
 }
 
 
@@ -58,4 +70,6 @@ def estilo_de_paso(paso, dirigido):
         estilo.discontinuas.update((arista, arista[::-1]))
     if paso.arista_actual is not None:
         pintar(paso.arista_actual, COLORES["examinada"])
+    for arista in paso.ciclo:
+        pintar(arista, COLORES["ciclo"])
     return estilo

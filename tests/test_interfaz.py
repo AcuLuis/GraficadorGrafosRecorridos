@@ -353,6 +353,8 @@ class TestAtajos:
         ("Eliminar Nodo", "Del"), ("Limpiar Grafo", "Ctrl+L"),
         (panel_vista.BFS, "Ctrl+1"), (panel_vista.DFS, "Ctrl+2"),
         (panel_vista.KRUSKAL, "Ctrl+3"), (panel_vista.DIJKSTRA, "Ctrl+4"),
+        (panel_vista.PRIM, "Ctrl+5"), (panel_vista.BELLMAN_FORD, "Ctrl+6"),
+        (panel_vista.TOPOLOGICO, "Ctrl+7"), (panel_vista.CICLOS, "Ctrl+8"),
         ("Reproducir / Pausar", "Ctrl+P"), ("Paso Anterior", "Ctrl+Left"), ("Paso Siguiente", "Ctrl+Right"),
         ("Primer Paso", "Ctrl+Home"), ("Último Paso", "Ctrl+End"),
     ])
@@ -517,6 +519,71 @@ class TestDijkstraConDestino:
         vista.ejecutar_dijkstra(1, 6)
         vista.eliminar_nodo(6)
         assert vista.panel_info.titulo == f"{panel_vista.DIJKSTRA} desde el nodo 1"
+
+
+def usar_grafo_dirigido(vista, aristas):
+    """Reemplaza el grafo por uno dirigido con nodos 1..n y las aristas ``(origen, destino, peso)`` dadas."""
+    vista.modelo.cambiar_tipo(dirigido=True)
+    cantidad = max(max(origen, destino) for origen, destino, _ in aristas)
+    for indice in range(cantidad):
+        vista.modelo.agregar_nodo(0.1 + 0.8 * indice / cantidad, 0.5 + 0.3 * (indice % 2))
+    for origen, destino, peso in aristas:
+        vista.modelo.agregar_arista(origen, destino, peso)
+
+
+def aristas_con_color(vista, clave):
+    _, aristas = colores_en_lienzo(vista)
+    return sorted(arista for arista, color in aristas.items() if color == COLORES[clave])
+
+
+class TestAlgoritmosNuevos:
+    def test_prim(self, vista):
+        vista.ejecutar_prim(1)
+        assert len(aristas_azules(vista)) == 7
+        assert vista.panel_info.titulo == f"{panel_vista.PRIM} desde el nodo 1"
+        assert vista.panel_info.resumen.endswith("peso total 26.")
+        assert "Candidato" in vista.leyenda.entradas
+
+    def test_prim_desde_el_menu_contextual(self, vista):
+        TestMenusContextuales.disparar(vista.menu_nodo(5), "Prim desde el nodo 5")
+        assert vista.lbl_algoritmo.text() == panel_vista.PRIM
+
+    def test_bellman_ford_con_pesos_negativos(self, ventana, vista, monkeypatch):
+        usar_grafo_dirigido(vista, [(1, 2, 4), (1, 3, 5), (3, 2, -3), (2, 4, 2)])
+        monkeypatch.setattr(panel_vista, "pedir_inicio_y_destino", lambda *a, **k: (1, 4))
+        accion(ventana, panel_vista.BELLMAN_FORD).trigger()
+        assert vista.panel_info.resumen == "Camino más corto: 1 → 3 → 2 → 4, costo 4."
+        assert vista.panel_info.tabla_distancias.isVisibleTo(vista.panel_info)
+
+    def test_dijkstra_rechaza_pesos_negativos(self, vista, avisos):
+        vista.modelo.cambiar_peso(1, 2, -1)
+        vista.ejecutar_dijkstra(1)
+        assert avisos == ["Dijkstra requiere pesos no negativos; para pesos negativos usa Bellman-Ford."]
+
+    def test_bellman_ford_muestra_el_ciclo_negativo(self, vista):
+        usar_grafo_dirigido(vista, [(1, 2, 1), (2, 3, -2), (3, 4, 1), (4, 2, -1)])
+        vista.ejecutar_bellman_ford(1)
+        assert "ciclo de peso negativo" in vista.panel_info.resumen
+        assert aristas_con_color(vista, "ciclo") == [(2, 3), (3, 4), (4, 2)]
+
+    def test_orden_topologico(self, vista):
+        usar_grafo_dirigido(vista, [(1, 3, 1), (2, 3, 1), (3, 4, 1)])
+        vista.ejecutar_topologico()
+        assert vista.panel_info.resumen == "Orden topológico: 1, 2, 3, 4."
+        assert "En la cola (sin entradas pendientes)" in vista.leyenda.entradas
+
+    def test_orden_topologico_en_grafo_no_dirigido(self, vista, avisos):
+        vista.ejecutar_topologico()
+        assert avisos == ["El orden topológico solo aplica a grafos dirigidos."]
+
+    def test_deteccion_de_ciclos(self, vista):
+        vista.ejecutar_ciclos()
+        ciclo = vista.pasos[-1].ciclo
+        assert len(ciclo) >= 3
+        assert vista.panel_info.resumen.startswith("Ciclo encontrado:")
+        for origen, destino in ciclo:
+            assert vista.lienzo._color_arista(origen, destino) == COLORES["ciclo"] or \
+                vista.lienzo._color_arista(destino, origen) == COLORES["ciclo"]
 
 
 class TestExportar:

@@ -21,7 +21,11 @@ ALTO_MINIMO = 600
 BFS = "BFS - Búsqueda en anchura"
 DFS = "DFS - Búsqueda en profundidad"
 KRUSKAL = "Kruskal - Árbol de expansión mínima"
+PRIM = "Prim - Árbol de expansión mínima"
 DIJKSTRA = "Dijkstra - Camino más corto"
+BELLMAN_FORD = "Bellman-Ford - Camino más corto con pesos negativos"
+TOPOLOGICO = "Orden topológico"
+CICLOS = "Detección de ciclos"
 
 AYUDA_MODO_NODO = ("Clic en un espacio vacío: crear nodo · Arrastrar un nodo: moverlo · "
                    "Clic en un nodo: seleccionarlo · Clic derecho: más opciones")
@@ -189,6 +193,8 @@ class PanelVista(QWidget):
         _agregar_opcion(menu, f"BFS desde el nodo {nodo}", lambda: self.ejecutar_bfs(nodo))
         _agregar_opcion(menu, f"DFS desde el nodo {nodo}", lambda: self.ejecutar_dfs(nodo))
         _agregar_opcion(menu, f"Dijkstra desde el nodo {nodo}", lambda: self.ejecutar_dijkstra(nodo))
+        _agregar_opcion(menu, f"Bellman-Ford desde el nodo {nodo}", lambda: self.ejecutar_bellman_ford(nodo))
+        _agregar_opcion(menu, f"Prim desde el nodo {nodo}", lambda: self.ejecutar_prim(nodo))
         origen = self.seleccionado
         if origen is not None and origen != nodo:
             _agregar_opcion(menu, f"Camino más corto del nodo {origen} al nodo {nodo}",
@@ -340,14 +346,14 @@ class PanelVista(QWidget):
         if inicio is not None:
             ejecutar(inicio)
 
-    def pedir_y_ejecutar_dijkstra(self):
-        """Pide el nodo inicial y, opcionalmente, el destino, y ejecuta Dijkstra."""
+    def pedir_inicio_destino_y_ejecutar(self, ejecutar):
+        """Pide el nodo inicial y, opcionalmente, el destino, y ejecuta el algoritmo de caminos mínimos."""
         if not self.modelo.tiene_aristas():
             QMessageBox.warning(self, "Advertencia", "No hay nodo o no hay aristas.")
             return
         eleccion = pedir_inicio_y_destino(self.modelo.grafo.nodes, self, self._inicio_sugerido())
         if eleccion is not None:
-            self.ejecutar_dijkstra(*eleccion)
+            ejecutar(*eleccion)
 
     def _inicio_sugerido(self):
         if self.seleccionado is not None:
@@ -368,11 +374,27 @@ class PanelVista(QWidget):
         self._ejecutar(KRUSKAL, "", "kruskal", lambda: algoritmos.kruskal_pasos(self.modelo.grafo),
                        self.ejecutar_kruskal)
 
+    def ejecutar_prim(self, inicio):
+        self._ejecutar(PRIM, f"desde el nodo {inicio}", "prim",
+                       lambda: algoritmos.prim_pasos(self.modelo.grafo, inicio), self.ejecutar_prim, inicio)
+
     def ejecutar_dijkstra(self, inicio, destino=None):
-        detalle = f"desde el nodo {inicio}" if destino is None else f"del nodo {inicio} al nodo {destino}"
-        self._ejecutar(DIJKSTRA, detalle, "dijkstra",
+        self._ejecutar(DIJKSTRA, _detalle_camino(inicio, destino), "dijkstra",
                        lambda: algoritmos.dijkstra_pasos(self.modelo.grafo, inicio, destino),
                        self.ejecutar_dijkstra, inicio, destino)
+
+    def ejecutar_bellman_ford(self, inicio, destino=None):
+        self._ejecutar(BELLMAN_FORD, _detalle_camino(inicio, destino), "bellman_ford",
+                       lambda: algoritmos.bellman_ford_pasos(self.modelo.grafo, inicio, destino),
+                       self.ejecutar_bellman_ford, inicio, destino)
+
+    def ejecutar_topologico(self):
+        self._ejecutar(TOPOLOGICO, "", "topologico", lambda: algoritmos.topologico_pasos(self.modelo.grafo),
+                       self.ejecutar_topologico)
+
+    def ejecutar_ciclos(self):
+        self._ejecutar(CICLOS, "", "ciclos", lambda: algoritmos.detectar_ciclo_pasos(self.modelo.grafo),
+                       self.ejecutar_ciclos)
 
     def _ejecutar(self, nombre, detalle, leyenda, calcular, repetir, *argumentos):
         """Calcula los pasos del algoritmo, guarda el resultado en el modelo y muestra el último paso."""
@@ -434,6 +456,10 @@ class PanelVista(QWidget):
         self._modificar("Cargar grafo de prueba",
                         lambda: self.modelo.cargar_texto(CARPETA_DATOS / "Nodos.txt", CARPETA_DATOS / "Aristas.txt"),
                         reiniciar_resultado=True, prefijo_error="No se pudo cargar el grafo de prueba:\n")
+
+
+def _detalle_camino(inicio, destino):
+    return f"desde el nodo {inicio}" if destino is None else f"del nodo {inicio} al nodo {destino}"
 
 
 def _agregar_opcion(menu, texto, funcion):

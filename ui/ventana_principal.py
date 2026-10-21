@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import QApplication, QDockWidget, QLabel, QMainWindow
 
 from modelo import ModeloGrafo
 from ui.panel_informacion import PanelInformacion
-from ui.panel_vista import BFS, DFS, DIJKSTRA, KRUSKAL, PanelVista
+from ui.panel_vista import BELLMAN_FORD, BFS, CICLOS, DFS, DIJKSTRA, KRUSKAL, PRIM, TOPOLOGICO, PanelVista
 
 ANCHO_PANEL_LATERAL = 340
 DURACION_AVISO_MS = 3000
@@ -67,8 +67,15 @@ class MainWindow(QMainWindow):
         self._agregar_menu("&Algoritmos", [
             (BFS, lambda *_: vista.pedir_inicio_y_ejecutar(vista.ejecutar_bfs), "Ctrl+1"),
             (DFS, lambda *_: vista.pedir_inicio_y_ejecutar(vista.ejecutar_dfs), "Ctrl+2"),
+            None,
             (KRUSKAL, vista.ejecutar_kruskal, "Ctrl+3"),
-            (DIJKSTRA, vista.pedir_y_ejecutar_dijkstra, "Ctrl+4"),
+            (PRIM, lambda *_: vista.pedir_inicio_y_ejecutar(vista.ejecutar_prim), "Ctrl+5"),
+            None,
+            (DIJKSTRA, lambda *_: vista.pedir_inicio_destino_y_ejecutar(vista.ejecutar_dijkstra), "Ctrl+4"),
+            (BELLMAN_FORD, lambda *_: vista.pedir_inicio_destino_y_ejecutar(vista.ejecutar_bellman_ford), "Ctrl+6"),
+            None,
+            (TOPOLOGICO, vista.ejecutar_topologico, "Ctrl+7"),
+            (CICLOS, vista.ejecutar_ciclos, "Ctrl+8"),
         ])
         reproductor = vista.reproductor
         self._agregar_menu("&Pasos", [
