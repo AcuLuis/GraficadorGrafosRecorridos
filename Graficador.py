@@ -95,7 +95,7 @@ class Lienzo:
         self.rect = Rectangle((0, 0), 1, 1, linewidth=2, edgecolor='black', facecolor='none')
         self.ax.add_patch(self.rect)
         nx.draw(self.graph, pos=self.pos, with_labels=True, font_weight='bold', ax=self.ax,
-            edge_color=[self.edge_colors.get(edge, 'black') for edge in self.graph.edges()])
+            edge_color=[self.colorArista(nodo1, nodo2) for nodo1, nodo2 in self.graph.edges()])
         nx.draw_networkx_edge_labels(self.graph, pos=self.pos, edge_labels=edge_labels, ax=self.ax)
         self.rect.set_edgecolor(original_edgecolor)
         self.canvas.draw_idle()
@@ -146,12 +146,15 @@ class Lienzo:
         for tupla in listaAristas:
             nodo1,nodo2=tupla
             self.edge_colors[(nodo1,nodo2)] = color
-            self.edge_colors[(nodo2,nodo1)] = color
+            if not self.graph.is_directed():
+                self.edge_colors[(nodo2,nodo1)] = color
         self.DibujarGrafo()
-    def setAristaColorDirigido(self,listaAristas,color):
-        for tupla in listaAristas:
-            nodo1,nodo2=tupla
-            self.edge_colors[(nodo1,nodo2)] = color
+    def colorArista(self, nodo1, nodo2):
+        if not self.graph.is_directed() and (nodo1, nodo2) not in self.edge_colors:
+            return self.edge_colors.get((nodo2, nodo1), "black")
+        return self.edge_colors.get((nodo1, nodo2), "black")
+    def ReiniciarColores(self):
+        self.edge_colors.clear()
     def EliminarNodo(self, nodo):
         self.graph.remove_node(nodo)
         self.pos.pop(nodo, None)
@@ -433,27 +436,18 @@ class PanelVista(QWidget):
         if self.hayAristas() and self.hayNodos():
             global verifica
             verifica =True
+            self.lienzo.ReiniciarColores()
             aristas=[]
-            grafo=self.lienzo.getPesos()
-            visited = set()  
-            queue = deque([(inicio, None)])
-            vecinosCargados=set()
+            visited = {inicio}
+            queue = deque([inicio])
             while queue:
-                node, prev_node = queue.popleft()
-                if node not in visited:
-                    visited.add(node)
-                if prev_node is not None:
-                    tupla=(prev_node,node)
-                    nodo1=str(tupla[0])
-                    nodo2=str(tupla[1])
-                    step=str(f"Va de nodo {nodo1} -> nodo {nodo2}\n")
-                    content=content+step
-                    aristas.append(tupla)
-                neighbors = op.getVecinos(grafo,node)
-                for neighbor in neighbors:
-                    if neighbor not in visited and neighbor not in vecinosCargados:
-                        vecinosCargados.add(neighbor)
-                        queue.append((neighbor, node))
+                node = queue.popleft()
+                for neighbor in self.lienzo.graph.neighbors(node):
+                    if neighbor not in visited:
+                        visited.add(neighbor)
+                        aristas.append((node, neighbor))
+                        content += f"Va de nodo {node} -> nodo {neighbor}\n"
+                        queue.append(neighbor)
             global panel
             panel.setContent(content)
             self.lienzo.setAristaColor(aristas,"blue")
@@ -461,14 +455,19 @@ class PanelVista(QWidget):
         else:
             QMessageBox.warning(self, "Advertencia", "No hay nodo o no hay aristas.")
     def KRUSKAL(self):
+        if self.lienzo.graph.is_directed():
+            QMessageBox.warning(self, "Advertencia", "Kruskal solo aplica a grafos no dirigidos.")
+            return
         content="Pasos Kruskal:\n"
         if self.hayAristas() and self.hayNodos():
             global verifica
             verifica =True
+            self.lienzo.ReiniciarColores()
             grafo = self.lienzo.getPesos()
             grafoSorted = op.getSortAristas(grafo)
             conjunto_nodos = {nodo: {nodo} for nodo in self.lienzo.getNodos()}
             camino = []
+            peso_total = 0
             for arista, peso in grafoSorted:
                 nodo1, nodo2 = arista
                 conjunto_nodo1 = conjunto_nodos[nodo1]
@@ -479,11 +478,12 @@ class PanelVista(QWidget):
                     step=str(f"Va de nodo {nodo1} -> nodo {nodo2}\n")
                     content=content+step
                     camino.append(arista)
-                    self.lienzo.setAristaColor([arista], "blue")
+                    peso_total += peso
                     nuevo_conjunto = conjunto_nodo1.union(conjunto_nodo2)
                     for nodo in nuevo_conjunto:
                         conjunto_nodos[nodo] = nuevo_conjunto
-            self.lienzo.DibujarGrafo()
+            content += f"\nPeso total: {peso_total}\n"
+            self.lienzo.setAristaColor(camino, "blue")
             panel.setContent(content)
             self.lblTipo.setText("Kruskal-Arbol de expansión mínima")
         else:
@@ -496,6 +496,7 @@ class PanelVista(QWidget):
         if self.hayAristas() and self.hayNodos():
             global verifica
             verifica =True
+            self.lienzo.ReiniciarColores()
             def dfs_util(nodo):
                 visitado.add(nodo)
 
@@ -504,10 +505,10 @@ class PanelVista(QWidget):
                     if veci not in visitado:
                         arista = (nodo, veci)
                         nodosVistados.append(arista)
-                        self.lienzo.setAristaColor([arista], "blue")
                         dfs_util(veci)
             visitado = set()
             dfs_util(inicio)
+            self.lienzo.setAristaColor(nodosVistados, "blue")
             for tupla in nodosVistados:
                 nodo1=str(tupla[0])
                 nodo2=str(tupla[1])
@@ -523,6 +524,7 @@ class PanelVista(QWidget):
         if self.hayAristas() and self.hayNodos():
             global verifica
             verifica = True
+            self.lienzo.ReiniciarColores()
             grafo = self.lienzo.graph
             distancias = {node: float('inf') for node in grafo.nodes()}
             distancias[inicio] = 0
@@ -558,20 +560,12 @@ class PanelVista(QWidget):
 
     def seleccion_recorrido(self):
         if self.hayAristas() and self.hayNodos():
-                aristas_a_eliminar = []
-                aristas_azules = []
-                for edge, color in self.lienzo.edge_colors.items():
-                    if color == "black":
-                        aristas_a_eliminar.append(edge)
-                    elif color == "blue":
-                        aristas_azules.append(edge)
-                for arista in aristas_a_eliminar:
-                    nodo1, nodo2 = arista
-                    if self.lienzo.graph.has_edge(nodo1, nodo2):
-                        self.lienzo.graph.remove_edge(nodo1, nodo2)
-                for edge in self.lienzo.graph.edges():
-                    if edge not in aristas_azules:
-                        self.lienzo.edge_colors[edge] = "black"
+                aristas = list(self.lienzo.graph.edges())
+                aristas_a_eliminar = [arista for arista in aristas if self.lienzo.colorArista(*arista) != "blue"]
+                if len(aristas_a_eliminar) == len(aristas):
+                    QMessageBox.warning(self, "Advertencia", "Primero ejecuta un algoritmo para obtener un recorrido.")
+                    return
+                self.lienzo.graph.remove_edges_from(aristas_a_eliminar)
                 self.lienzo.DibujarGrafo()
 class Panel(QWidget):
     def __init__(self):
