@@ -5,17 +5,7 @@ import pytest
 
 from algoritmos import (bellman_ford, bellman_ford_pasos, bfs_pasos, camino_minimo, dfs_pasos, dijkstra_pasos,
                         kruskal_pasos, prim, prim_pasos)
-from conftest import construir
-
-
-def invariantes_comunes(pasos):
-    assert pasos, "debe haber al menos un paso"
-    for paso in pasos:
-        assert paso.descripcion
-        assert paso.actual not in paso.frontera
-        assert not set(paso.frontera) & paso.visitados
-    for anterior, siguiente in zip(pasos, pasos[1:]):
-        assert anterior.visitados <= siguiente.visitados
+from conftest import construir, invariantes_comunes
 
 
 @pytest.mark.parametrize("generar, referencia", [(bfs_pasos, nx.bfs_edges), (dfs_pasos, nx.dfs_edges)])

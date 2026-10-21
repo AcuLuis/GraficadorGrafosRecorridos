@@ -16,6 +16,17 @@ def construir(aristas, dirigido=False, nodos_extra=()):
     return grafo
 
 
+def invariantes_comunes(pasos):
+    """Propiedades que cumplen los pasos de todos los algoritmos."""
+    assert pasos, "debe haber al menos un paso"
+    for paso in pasos:
+        assert paso.descripcion
+        assert paso.actual not in paso.frontera
+        assert not set(paso.frontera) & paso.visitados
+    for anterior, siguiente in zip(pasos, pasos[1:]):
+        assert anterior.visitados <= siguiente.visitados
+
+
 @pytest.fixture
 def grafo_prueba():
     return construir(ARISTAS_PRUEBA)
