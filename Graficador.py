@@ -77,11 +77,12 @@ class Lienzo:
     def MouseClick(self, event):
         if event.xdata is not None and event.ydata is not None:
             if self.main_window.dibNodoIsSelected():
-                node_id = len(self.graph.nodes) + 1
+                node_id = self.siguienteId()
                 self.graph.add_node(node_id)
                 self.pos[node_id] = (event.xdata, event.ydata)
-                if self.main_window.dibNodoIsSelected():
-                    self.DibujarGrafo()
+                self.DibujarGrafo()
+    def siguienteId(self):
+        return max(self.graph.nodes, default=0) + 1
     def DibujarGrafo(self):
         edge_labels = nx.get_edge_attributes(self.graph, 'weight')
         original_edgecolor = self.rect.get_edgecolor()
@@ -149,6 +150,11 @@ class Lienzo:
         for tupla in listaAristas:
             nodo1,nodo2=tupla
             self.edge_colors[(nodo1,nodo2)] = color
+    def EliminarNodo(self, nodo):
+        self.graph.remove_node(nodo)
+        self.pos.pop(nodo, None)
+        self.edge_colors = {arista: color for arista, color in self.edge_colors.items() if nodo not in arista}
+        self.DibujarGrafo()
     def Limpiar(self):
         self.graph.clear()
         self.pos = {}
@@ -347,15 +353,19 @@ class PanelVista(QWidget):
         nodo, ok = QInputDialog.getInt(self, "Eliminar Nodo", "Ingrese el nodo a eliminar:")
         if ok:
             if nodo in self.lienzo.graph.nodes:
-                self.lienzo.graph.remove_node(nodo)
-                self.lienzo.DibujarGrafo()
+                self.lienzo.EliminarNodo(nodo)
                 algoritmo_actual = self.lblTipo.text()
-                if "BFS" in algoritmo_actual:
+                if not self.hayAristas():
+                    self.lblTipo.setText("")
+                    panel.setContent(None)
+                elif "BFS" in algoritmo_actual:
                     self.BFS(next(iter(self.lienzo.graph.nodes), None))  # Ejecuta BFS desde otro nodo
                 elif "DFS" in algoritmo_actual:
                     self.DFS(next(iter(self.lienzo.graph.nodes), None))  # Ejecuta DFS desde otro nodo
                 elif "Kruskal" in algoritmo_actual:
                     self.KRUSKAL()  # Ejecuta Kruskal nuevamente
+                elif "DIJSKTRA" in algoritmo_actual:
+                    self.DIJKSTRA(next(iter(self.lienzo.graph.nodes), None))  # Ejecuta Dijkstra desde otro nodo
             else:
                 QMessageBox.warning(self, "Error", "El nodo no existe en el grafo.")
 
@@ -400,11 +410,6 @@ class PanelVista(QWidget):
                 self.lienzo.DibujarArista(padre, hijo, peso)
     def resizeEvent(self, event):
         super().resizeEvent(event)
-    def add_node(self, node):    
-        node_id = len(self.lienzo.graph.nodes) + 1
-        self.lienzo.graph.add_node(node_id)
-        self.lienzo.pos[node_id] = (node.x, node.y)
-        self.lienzo.DibujarGrafo()
     def onRadioButtonToggled(self, state):
         if state:
             self.lienzo.fig.canvas.mpl_disconnect(self.lienzo.cid)
