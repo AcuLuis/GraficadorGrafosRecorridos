@@ -64,13 +64,11 @@ class TestEdicion:
         modelo.cambiar_peso(1, 2, 9)
         assert modelo.peso(1, 2) == 9
 
-    @pytest.mark.parametrize("operacion", [
-        lambda modelo: modelo.agregar_arista(1, 3, -1),
-        lambda modelo: modelo.cambiar_peso(1, 2, -1),
-    ])
-    def test_rechaza_pesos_negativos(self, modelo, operacion):
-        with pytest.raises(ValueError, match="mayor o igual a 0"):
-            operacion(modelo)
+    def test_admite_pesos_negativos(self, modelo):
+        modelo.agregar_arista(1, 3, -2)
+        modelo.cambiar_peso(1, 2, -1)
+        assert modelo.peso(1, 3) == -2
+        assert modelo.peso(1, 2) == -1
 
     def test_eliminar_arista(self, modelo):
         modelo.pintar_aristas([(1, 2)], "blue")

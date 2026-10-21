@@ -59,7 +59,6 @@ class ModeloGrafo:
             raise ValueError("Los nodos no se encuentran.")
         if faltantes:
             raise ValueError(f"El nodo {faltantes[0]} no se encuentra.")
-        _validar_peso(peso)
         self.grafo.add_edge(origen, destino, weight=peso)
 
     def peso(self, origen, destino):
@@ -68,7 +67,6 @@ class ModeloGrafo:
 
     def cambiar_peso(self, origen, destino, peso):
         self._validar_arista(origen, destino)
-        _validar_peso(peso)
         self.grafo[origen][destino]["weight"] = peso
 
     def eliminar_arista(self, origen, destino):
@@ -179,11 +177,6 @@ class ModeloGrafo:
 
     def _reemplazar(self, otro):
         self.grafo, self.posiciones, self.colores = otro.grafo, otro.posiciones, otro.colores
-
-
-def _validar_peso(peso):
-    if peso < 0:
-        raise ValueError("El peso debe ser un entero mayor o igual a 0.")
 
 
 def _leer_tuplas(ruta):

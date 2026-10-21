@@ -3,7 +3,8 @@ import math
 import networkx as nx
 import pytest
 
-from algoritmos import bfs_pasos, camino_minimo, dfs_pasos, dijkstra_pasos, kruskal_pasos, prim, prim_pasos
+from algoritmos import (bellman_ford, bellman_ford_pasos, bfs_pasos, camino_minimo, dfs_pasos, dijkstra_pasos,
+                        kruskal_pasos, prim, prim_pasos)
 from conftest import construir
 
 
@@ -152,3 +153,57 @@ class TestDijkstraPasos:
     def test_destino_inexistente(self, grafo_prueba):
         with pytest.raises(ValueError, match="El nodo 99 no existe"):
             dijkstra_pasos(grafo_prueba, 1, 99)
+
+
+@pytest.fixture
+def grafo_con_negativos():
+    # Dirigido, con pesos negativos y sin ciclos negativos.
+    return construir([(1, 2, 4), (1, 3, 5), (3, 2, -3), (2, 4, 2), (4, 5, -1), (3, 5, 4)], dirigido=True)
+
+
+class TestBellmanFord:
+    def test_coincide_con_dijkstra_sin_negativos(self, grafo_prueba):
+        distancias, _ = bellman_ford(grafo_prueba, 1)
+        assert distancias == nx.single_source_dijkstra_path_length(grafo_prueba, 1)
+
+    def test_pesos_negativos(self, grafo_con_negativos):
+        distancias, aristas = bellman_ford(grafo_con_negativos, 1)
+        esperadas = nx.single_source_bellman_ford_path_length(grafo_con_negativos, 1)
+        assert distancias == esperadas
+        for origen, destino, peso in aristas:
+            assert distancias[destino] == distancias[origen] + peso
+
+    def test_dijkstra_sugiere_bellman_ford(self, grafo_con_negativos):
+        with pytest.raises(ValueError, match="usa Bellman-Ford"):
+            dijkstra_pasos(grafo_con_negativos, 1)
+
+    def test_se_detiene_si_una_ronda_no_cambia_nada(self, grafo_prueba):
+        pasos = bellman_ford_pasos(grafo_prueba, 1)
+        rondas = [paso for paso in pasos if paso.descripcion.startswith("Ronda")]
+        assert len(rondas) < grafo_prueba.number_of_nodes() - 1
+        assert "no cambió ninguna distancia" in pasos[-2].descripcion
+
+    def test_camino_a_un_destino(self, grafo_con_negativos):
+        final = bellman_ford_pasos(grafo_con_negativos, 1, 5)[-1]
+        assert final.descripcion == "Camino más corto: 1 → 3 → 2 → 4 → 5, costo 3."
+        assert final.aristas == ((1, 3), (3, 2), (2, 4), (4, 5))
+
+    def test_ciclo_negativo_dirigido(self):
+        grafo = construir([(1, 2, 1), (2, 3, -2), (3, 4, 1), (4, 2, -1)], dirigido=True)
+        final = bellman_ford_pasos(grafo, 1)[-1]
+        assert nx.negative_edge_cycle(grafo)
+        assert final.aristas == ()
+        assert sorted(final.ciclo) == [(2, 3), (3, 4), (4, 2)]
+        assert sum(grafo.edges[arista]["weight"] for arista in final.ciclo) < 0
+        assert "ciclo de peso negativo" in final.descripcion
+        with pytest.raises(ValueError, match="ciclo de peso negativo"):
+            bellman_ford(grafo, 1)
+
+    def test_arista_negativa_no_dirigida_es_un_ciclo(self):
+        final = bellman_ford_pasos(construir([(1, 2, 3), (2, 3, -1)]), 1)[-1]
+        assert {frozenset(arista) for arista in final.ciclo} == {frozenset((2, 3))}
+
+    def test_ciclo_no_alcanzable_no_importa(self):
+        grafo = construir([(1, 2, 1), (3, 4, -2), (4, 3, 1)], dirigido=True)
+        distancias, _ = bellman_ford(grafo, 1)
+        assert distancias == {1: 0, 2: 1, 3: math.inf, 4: math.inf}

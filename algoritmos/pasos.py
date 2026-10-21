@@ -11,7 +11,8 @@ class Paso:
     - ``aristas``: aristas elegidas hasta ahora (recorrido, árbol o camino), como ``(origen, destino)``.
     - ``arista_actual``: arista examinada en este paso.
     - ``descartadas``: aristas descartadas (en Kruskal, las que formarían un ciclo).
-    - ``distancias`` y ``anteriores``: distancia y predecesor de cada nodo (solo Dijkstra).
+    - ``distancias`` y ``anteriores``: distancia y predecesor de cada nodo (Dijkstra y Bellman-Ford).
+    - ``ciclo``: aristas de un ciclo encontrado (un ciclo negativo, o el ciclo que impide un orden topológico).
     """
 
     descripcion: str
@@ -23,3 +24,4 @@ class Paso:
     descartadas: tuple = ()
     distancias: dict = None
     anteriores: dict = None
+    ciclo: tuple = ()

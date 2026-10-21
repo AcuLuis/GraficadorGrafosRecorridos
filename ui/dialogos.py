@@ -43,8 +43,8 @@ class DialogoArista(DialogoEnteros):
     def __init__(self, parent=None):
         super().__init__(
             "Ingresar Arista",
-            [("Nodo Padre:", 1), ("Nodo Hijo:", 1), ("Peso:", 0)],
-            "Los nodos deben ser enteros positivos y el peso un entero mayor o igual a 0.",
+            [("Nodo Padre:", 1), ("Nodo Hijo:", 1), ("Peso:", -VALOR_MAXIMO)],
+            "Los nodos deben ser enteros positivos y el peso un número entero.",
             parent,
         )
 
@@ -95,8 +95,8 @@ def pedir_arista(parent=None):
 
 
 def pedir_peso(parent, etiqueta, valor=1):
-    """Devuelve el peso ingresado (entero mayor o igual a 0) o ``None`` si se cancela."""
-    peso, aceptado = QInputDialog.getInt(parent, "Peso de la arista", etiqueta, valor, 0, VALOR_MAXIMO)
+    """Devuelve el peso ingresado (un entero, que puede ser negativo) o ``None`` si se cancela."""
+    peso, aceptado = QInputDialog.getInt(parent, "Peso de la arista", etiqueta, valor, -VALOR_MAXIMO, VALOR_MAXIMO)
     return peso if aceptado else None
 
 
