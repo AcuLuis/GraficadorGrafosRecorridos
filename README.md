@@ -36,12 +36,24 @@ pip install -r requirements.txt
 ```
 
 ## Estructura del código
-El código está organizado en varias clases principales:
+El código está separado en tres capas: los algoritmos y el modelo no dependen de la interfaz gráfica, por lo que se pueden probar y reutilizar por separado.
 
-- **Lienzo**: Esta clase maneja la visualización del grafo y la interacción con el usuario. Se encarga de dibujar los nodos y aristas, así como de manejar eventos como clics del mouse.
-- **MainWindow**: Es la ventana principal de la aplicación. Contiene los menús y el panel lateral, y pide los datos necesarios para ejecutar cada algoritmo.
-- **PanelVista**: Es un widget que contiene el lienzo donde se dibuja el grafo, los controles para interactuar con él y la lógica de los algoritmos.
-- **Panel**: Es un panel lateral que muestra información sobre los algoritmos ejecutados, como los pasos de BFS, DFS, etc.
+```
+Graficador.py            Punto de entrada
+algoritmos/              Funciones puras sobre grafos de NetworkX
+  recorridos.py          bfs, dfs
+  arbol_minimo.py        kruskal
+  camino_minimo.py       dijkstra
+modelo/grafo.py          ModeloGrafo: nodos, posiciones, colores, guardado y carga
+ui/                      Interfaz PyQt6
+  ventana_principal.py   MainWindow: menús y panel lateral
+  panel_vista.py         PanelVista: controles de edición y ejecución de algoritmos
+  lienzo.py              Lienzo: dibuja el grafo con matplotlib y emite los clics
+  panel_informacion.py   PanelInformacion: pasos del último algoritmo
+  dialogos.py            Diálogos para ingresar nodos y aristas
+datos/                   Grafo de prueba (Nodos.txt, Aristas.txt)
+tests/                   Pruebas con pytest
+```
 
 ## Uso
 - **Dibujar nodos**: Selecciona la opción "Dibujar Nodo" y haz clic en el lienzo para agregar nodos.
@@ -50,7 +62,7 @@ El código está organizado en varias clases principales:
 
 - **Ejecutar algoritmos**: Selecciona un algoritmo del menú "Algoritmos" y sigue las instrucciones para ejecutarlo.
 
-- **Grafo de prueba**: En el menú "Grafos" la opción "Grafo de Prueba" carga el grafo definido en `Nodos.txt` y `Aristas.txt`.
+- **Grafo de prueba**: En el menú "Grafos" la opción "Grafo de Prueba" carga el grafo definido en `datos/Nodos.txt` y `datos/Aristas.txt`.
 
 - **Guardar y cargar grafos**: Utiliza las opciones del menú "Archivo" para guardar o cargar un grafo en formato JSON.
 
@@ -61,6 +73,14 @@ Para ejecutar la aplicación, ejecuta el archivo principal:
 
 ```bash
 python Graficador.py
+```
+
+## Pruebas
+Los algoritmos se comparan contra las implementaciones de NetworkX; también hay pruebas del modelo y pruebas de humo de la interfaz (se ejecutan sin abrir ventanas).
+
+```bash
+pip install -r requirements-dev.txt
+pytest
 ```
 
 ## Contribuciones
