@@ -1,10 +1,11 @@
-from PyQt5.QtCore import *
-from PyQt5.QtGui import *
-from PyQt5.QtWidgets import *
+from PyQt6.QtCore import *
+from PyQt6.QtGui import *
+from PyQt6.QtWidgets import *
 import networkx as nx
-import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
+from matplotlib.patches import Rectangle
 from Arista import MiDialogo
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from Utilidades import Operaciones as op
 from collections import deque
 from DialogNodo import *
@@ -27,12 +28,14 @@ class Lienzo:
         self.edge_colors={}
         self.edge_weights = {} 
         self.pos = {}
-        self.fig, self.ax = plt.subplots()
-        self.cid = self.fig.canvas.mpl_connect('button_press_event', self.MouseClick)
+        self.fig = Figure()
+        self.canvas = FigureCanvasQTAgg(self.fig)
+        self.ax = self.fig.add_subplot()
+        self.cid = self.canvas.mpl_connect('button_press_event', self.MouseClick)
         self.ax.set_xlim(0, 1)
         self.ax.set_ylim(0, 1)
         self.ax.axis('off')
-        self.rect = plt.Rectangle((0,0), 1, 1, linewidth=2, edgecolor='black', facecolor='none')
+        self.rect = Rectangle((0,0), 1, 1, linewidth=2, edgecolor='black', facecolor='none')
         self.ax.add_patch(self.rect)
     def setTipoGrafo(self, tipo):
         if(tipo=="Dirigido"):
@@ -55,13 +58,13 @@ class Lienzo:
             self.Alertas(msg)
     def Alertas(self, mensaje):
         alerta = QMessageBox()
-        alerta.setIcon(QMessageBox.Warning)
+        alerta.setIcon(QMessageBox.Icon.Warning)
         if mensaje == "Cambiando tipo de grafo.":
             alerta.setText('Se borrará tu avance. \n ¿Estás seguro de continuar?')
             alerta.setWindowTitle('Alerta')
-            btnSi = alerta.addButton('Sí', QMessageBox.YesRole)
-            btnNo = alerta.addButton('Cancelar', QMessageBox.NoRole)
-            alerta.exec_()
+            btnSi = alerta.addButton('Sí', QMessageBox.ButtonRole.YesRole)
+            btnNo = alerta.addButton('Cancelar', QMessageBox.ButtonRole.NoRole)
+            alerta.exec()
             if alerta.clickedButton() == btnSi:
                 self.Limpiar()
                 return True
@@ -71,7 +74,7 @@ class Lienzo:
             alerta.setText("Elemento no encontrado")
             alerta.setInformativeText(mensaje)
             alerta.setWindowTitle("Alerta")
-            alerta.exec_()
+            alerta.exec()
     def MouseClick(self, event):
         if event.xdata is not None and event.ydata is not None:
             if self.main_window.dibNodoIsSelected():
@@ -87,7 +90,7 @@ class Lienzo:
         self.ax.set_xlim(0, 1)
         self.ax.set_ylim(0, 1)
         self.ax.axis('off')
-        self.rect = plt.Rectangle((0, 0), 1, 1, linewidth=2, edgecolor='black', facecolor='none')
+        self.rect = Rectangle((0, 0), 1, 1, linewidth=2, edgecolor='black', facecolor='none')
         self.ax.add_patch(self.rect)
         if( not self.edge_colors and not self.edge_weights):
              nx.draw(self.graph, pos=self.pos, with_labels=True, font_weight='bold', ax=self.ax)
@@ -97,7 +100,7 @@ class Lienzo:
                 edge_color=[self.edge_colors.get(edge, 'black') for edge in self.graph.edges()])
             nx.draw_networkx_edge_labels(self.graph, pos=self.pos, edge_labels=edge_labels, ax=self.ax)
         self.rect.set_edgecolor(original_edgecolor)
-        plt.draw()
+        self.canvas.draw_idle()
     def GuardarIMG(self):
         file_path, _ = QFileDialog.getSaveFileName(self.main_window, 'Guardar Imagen', '', 'PNG Files (*.png);;All Files (*)')
         if file_path:
@@ -219,7 +222,7 @@ class MainWindow(QMainWindow):
                            "{"
                            "background : lightblue;"
                            "}")
-        self.addDockWidget(Qt.LeftDockWidgetArea, self.dock_widget)
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.dock_widget)
     def GuardarImagen(self):
         centralWidget.GuardarImagen()
     def GuardarJson(self):
@@ -228,13 +231,13 @@ class MainWindow(QMainWindow):
         centralWidget.CargarJson()
     def Alertas(self, mensaje):
         alerta = QMessageBox()
-        alerta.setIcon(QMessageBox.Warning)
+        alerta.setIcon(QMessageBox.Icon.Warning)
         if mensaje == "Cambiando tipo de grafo.":
             alerta.setText('Se borrará tu avance. \n ¿Estás seguro de continuar?')
             alerta.setWindowTitle('Alerta')
-            btnSi = alerta.addButton('Sí', QMessageBox.YesRole)
-            btnNo = alerta.addButton('Cancelar', QMessageBox.NoRole)
-            alerta.exec_()
+            btnSi = alerta.addButton('Sí', QMessageBox.ButtonRole.YesRole)
+            btnNo = alerta.addButton('Cancelar', QMessageBox.ButtonRole.NoRole)
+            alerta.exec()
             if alerta.clickedButton() == btnSi:
                 self.Limpiar()
                 return True
@@ -244,12 +247,12 @@ class MainWindow(QMainWindow):
             alerta.setText("Elemento no encontrado")
             alerta.setInformativeText(mensaje)
             alerta.setWindowTitle("Alerta")
-            alerta.exec_()
+            alerta.exec()
     def BFS(self):
         print("BFS ENTRE MAIN")
         dialogNodo=InicioNodo()
-        resultado = dialogNodo.exec_()
-        if resultado == QDialog.Accepted:
+        resultado = dialogNodo.exec()
+        if resultado == QDialog.DialogCode.Accepted:
             valor1 = dialogNodo.valor1
             print(valor1)
             if valor1 != None :
@@ -260,8 +263,8 @@ class MainWindow(QMainWindow):
         centralWidget.KRUSKAL()
     def DFS(self):
         dialogNodo=InicioNodo()
-        resultado = dialogNodo.exec_()
-        if resultado == QDialog.Accepted:
+        resultado = dialogNodo.exec()
+        if resultado == QDialog.DialogCode.Accepted:
             valor1 = dialogNodo.valor1
             print(valor1)
             if valor1 != None :
@@ -270,8 +273,8 @@ class MainWindow(QMainWindow):
                 self.Alertas("Ingresar valores correctos")
     def DIJSKTRA(self):
         dialogNodo=InicioNodo()
-        resultado = dialogNodo.exec_()
-        if resultado == QDialog.Accepted:
+        resultado = dialogNodo.exec()
+        if resultado == QDialog.DialogCode.Accepted:
             valor1 = dialogNodo.valor1
             print(valor1)
             if valor1 != None :
@@ -433,8 +436,8 @@ class PanelVista(QWidget):
                 self.lienzo.cid = self.lienzo.fig.canvas.mpl_connect('button_press_event', self.lienzo.MouseClick)
     def PideNodos(self):
         dialogo = MiDialogo()
-        resultado = dialogo.exec_()
-        if resultado == QDialog.Accepted:
+        resultado = dialogo.exec()
+        if resultado == QDialog.DialogCode.Accepted:
             valor1 = dialogo.valor1
             valor2 = dialogo.valor2
             valor3 = dialogo.valor3
@@ -624,4 +627,4 @@ if __name__ == "__main__":
     app = QApplication([])
     window = MainWindow()
     window.show()
-    app.exec_()
+    app.exec()

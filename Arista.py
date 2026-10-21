@@ -1,5 +1,5 @@
-from PyQt5.QtWidgets import QDialog,QHBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox
-from PyQt5.QtGui import QIntValidator
+from PyQt6.QtWidgets import QDialog,QHBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox
+from PyQt6.QtGui import QIntValidator
 class MiDialogo(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -37,8 +37,8 @@ class MiDialogo(QDialog):
             self.accept()
         else:
             alerta = QMessageBox()
-            alerta.setIcon(QMessageBox.Warning)
+            alerta.setIcon(QMessageBox.Icon.Warning)
             alerta.setText("Error")
             alerta.setInformativeText("Ingrese los datos correctos.")
             alerta.setWindowTitle("Alerta")
-            alerta.exec_()
+            alerta.exec()

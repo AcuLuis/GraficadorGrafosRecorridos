@@ -1,5 +1,5 @@
-from PyQt5.QtWidgets import QDialog, QHBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox
-from PyQt5.QtGui import QIntValidator
+from PyQt6.QtWidgets import QDialog, QHBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox
+from PyQt6.QtGui import QIntValidator
 class MiDialogoNodoEliminar(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -21,11 +21,11 @@ class MiDialogoNodoEliminar(QDialog):
             self.accept()
         else:
             alerta = QMessageBox()
-            alerta.setIcon(QMessageBox.Warning)
+            alerta.setIcon(QMessageBox.Icon.Warning)
             alerta.setText("Error")
             alerta.setInformativeText("Ingrese los datos correctos.")
             alerta.setWindowTitle("Alerta")
-            alerta.exec_()
+            alerta.exec()
 class InicioNodo(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -47,8 +47,8 @@ class InicioNodo(QDialog):
             self.accept()
         else:
             alerta = QMessageBox()
-            alerta.setIcon(QMessageBox.Warning)
+            alerta.setIcon(QMessageBox.Icon.Warning)
             alerta.setText("Error")
             alerta.setInformativeText("Ingrese los datos correctos.")
             alerta.setWindowTitle("Alerta")
-            alerta.exec_()
+            alerta.exec()
