@@ -3,6 +3,16 @@
 ## Graficador de grafos con recorridos, árboles mínimos y caminos más cortos
 Este proyecto es una aplicación gráfica desarrollada en Python utilizando las bibliotecas PyQt6 y NetworkX. La aplicación permite dibujar y manipular grafos y ejecutar sobre ellos algoritmos clásicos (BFS, DFS, Kruskal, Prim, Dijkstra, Bellman-Ford, orden topológico y detección de ciclos), que se pueden seguir paso a paso.
 
+> ⭐ **¿Te resulta útil?** Si este proyecto te ayuda a estudiar, enseñar o entender mejor los grafos, me harías muy feliz regalándole una estrella en GitHub (el botón **Star**, arriba a la derecha). No cuesta nada y me motiva a seguir mejorándolo. ¡Gracias!
+
+## Capturas
+
+| Camino más corto con Dijkstra | Kruskal paso a paso |
+| --- | --- |
+| ![Dijkstra resaltando el camino más corto del nodo 1 al 6, con la tabla de pasos y la tabla de distancias](docs/capturas/camino_mas_corto.png) | ![Kruskal a mitad de camino: aristas del árbol en azul, la arista revisada en rojo y las descartadas en gris discontinuo](docs/capturas/paso_a_paso.png) |
+| **Orden topológico de un grafo dirigido** | **Tema oscuro** |
+| ![Orden topológico de un grafo de tareas, con la cola de nodos sin entradas pendientes](docs/capturas/orden_topologico.png) | ![Búsqueda en anchura en el tema oscuro, con la tabla de pasos y la leyenda de colores](docs/capturas/tema_oscuro.png) |
+
 ## Características principales
 - **Edición directa con el mouse**: crear nodos con un clic, unirlos con aristas haciendo clic en el origen y el destino, arrastrarlos para moverlos y usar el clic derecho para editar pesos o eliminar elementos.
 - **Grafos dirigidos y no dirigidos**: se elige el tipo desde la cabecera de la ventana. Los pesos son enteros y pueden ser negativos.
@@ -54,7 +64,9 @@ El código está separado en tres capas: los algoritmos y el modelo no dependen 
 
 ```
 Graficador.py            Punto de entrada
+iniciar.bat, iniciar.sh  Crean el entorno virtual si hace falta y abren la aplicación
 empaquetar.py            Genera el ejecutable con PyInstaller
+docs/                    Capturas del README y el script que las genera
 algoritmos/              Funciones puras sobre grafos de NetworkX
   pasos.py               Paso: estado del algoritmo después de cada paso
   recorridos.py          bfs, dfs (y sus versiones *_pasos)
@@ -120,7 +132,12 @@ La barra de estado, en la parte inferior de la ventana, muestra en todo momento 
 | Tema oscuro | Ctrl+Shift+D |
 
 ## Ejecución
-Para ejecutar la aplicación, ejecuta el archivo principal:
+La forma más simple es usar el script de inicio. La primera vez crea un entorno virtual (`.venv`) dentro del proyecto e instala las dependencias; las siguientes veces abre la aplicación directamente.
+
+- **Windows**: doble clic en `iniciar.bat`.
+- **Linux o macOS**: `sh iniciar.sh` desde una terminal.
+
+Si prefieres manejar tú las dependencias, después de instalarlas ejecuta el archivo principal:
 
 ```bash
 python Graficador.py
@@ -144,8 +161,16 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
+Las capturas de este README se generan con la aplicación real; el script muestra cada pantalla unos segundos antes de guardarla en `docs/capturas/`:
+
+```bash
+python docs/generar_capturas.py
+```
+
 ## Contribuciones
 Si deseas contribuir a este proyecto, siéntete libre de hacer un fork y enviar un pull request. Cualquier mejora, corrección de errores o nueva funcionalidad es bienvenida.
+
+Y si el proyecto te sirvió, una ⭐ en GitHub es la mejor forma de decir gracias y ayuda a que más estudiantes lo encuentren.
 
 ## Licencia
 Este proyecto está bajo la licencia MIT. Consulta el archivo `LICENSE` para más detalles.
