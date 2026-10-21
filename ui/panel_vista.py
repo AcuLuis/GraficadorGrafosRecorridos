@@ -28,7 +28,8 @@ TOPOLOGICO = "Orden topológico"
 CICLOS = "Detección de ciclos"
 
 AYUDA_MODO_NODO = ("Clic en un espacio vacío: crear nodo · Arrastrar un nodo: moverlo · "
-                   "Clic en un nodo: seleccionarlo · Clic derecho: más opciones")
+                   "Clic en un nodo: seleccionarlo · Clic derecho: más opciones · "
+                   "Rueda: zoom · Botón central: mover la vista")
 AYUDA_ARISTA_ORIGEN = "Modo arista: haz clic en el nodo de origen."
 AYUDA_ARISTA_DESTINO = "Modo arista: origen en el nodo {nodo}. Haz clic en el nodo de destino (Esc cancela)."
 

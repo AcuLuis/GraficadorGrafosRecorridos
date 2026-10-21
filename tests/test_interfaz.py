@@ -366,6 +366,8 @@ class TestAtajos:
         (panel_vista.TOPOLOGICO, "Ctrl+7"), (panel_vista.CICLOS, "Ctrl+8"),
         ("Reproducir / Pausar", "Ctrl+P"), ("Paso Anterior", "Ctrl+Left"), ("Paso Siguiente", "Ctrl+Right"),
         ("Primer Paso", "Ctrl+Home"), ("Último Paso", "Ctrl+End"),
+        ("Acercar", "Ctrl++"), ("Alejar", "Ctrl+-"), ("Restablecer Vista", "Ctrl+0"),
+        ("Grafo Aleatorio…", "Ctrl+G"), ("Importar Lista de Adyacencia…", "Ctrl+I"),
     ])
     def test_atajos_definidos(self, ventana, texto, atajo):
         assert accion(ventana, texto).shortcut().toString() == atajo
@@ -638,6 +640,64 @@ class TestGrafosNuevos:
         accion(ventana, "Importar Lista de Adyacencia…").trigger()
         assert avisos[0].startswith("No se pudo importar la lista de adyacencia:\nLínea 1:")
         assert vista.modelo.grafo.number_of_edges() == 17
+
+
+def girar_rueda(vista, punto, pasos):
+    lienzo = vista.lienzo
+    x, y = lienzo.ejes.transData.transform(punto)
+    evento = MouseEvent("scroll_event", lienzo, x, y, button="up" if pasos > 0 else "down", step=pasos)
+    lienzo.callbacks.process("scroll_event", evento)
+
+
+class TestZoom:
+    def test_rueda_acerca_alrededor_del_cursor(self, vista):
+        punto = posicion(vista, 3)
+        pixel_antes = vista.lienzo.ejes.transData.transform(punto)
+        girar_rueda(vista, punto, 2)
+        x0, x1, _, _ = vista.lienzo.limites
+        assert x1 - x0 == pytest.approx(1 / 1.25 ** 2)
+        assert vista.lienzo.ejes.transData.transform(punto) == pytest.approx(pixel_antes)
+
+    def test_menu_ver(self, ventana, vista):
+        accion(ventana, "Acercar").trigger()
+        assert vista.lienzo.ejes.get_xlim()[1] - vista.lienzo.ejes.get_xlim()[0] == pytest.approx(0.8)
+        accion(ventana, "Alejar").trigger()
+        accion(ventana, "Alejar").trigger()
+        assert vista.lienzo.ejes.get_xlim()[1] - vista.lienzo.ejes.get_xlim()[0] == pytest.approx(1.25)
+        accion(ventana, "Restablecer Vista").trigger()
+        assert vista.lienzo.ejes.get_xlim() == (0.0, 1.0)
+
+    def test_limites_del_zoom(self, vista):
+        for _ in range(40):
+            vista.lienzo.acercar()
+        assert vista.lienzo.limites[1] - vista.lienzo.limites[0] == pytest.approx(0.05)
+        for _ in range(40):
+            vista.lienzo.alejar()
+        assert vista.lienzo.limites[1] - vista.lienzo.limites[0] == pytest.approx(4.0)
+
+    def test_boton_central_desplaza_la_vista(self, vista):
+        posiciones = dict(vista.modelo.posiciones)
+        mouse(vista, "button_press_event", (0.5, 0.5), MouseButton.MIDDLE)
+        mouse(vista, "motion_notify_event", (0.3, 0.5))
+        mouse(vista, "button_release_event", (0.3, 0.5), MouseButton.MIDDLE)
+        x0, x1, y0, y1 = vista.lienzo.limites
+        # Los eventos del mouse llegan en píxeles enteros, así que se admite un error de menos de un píxel.
+        assert (x0, x1) == pytest.approx((0.2, 1.2), abs=0.005)
+        assert (y0, y1) == pytest.approx((0.0, 1.0), abs=0.005)
+        assert vista.modelo.posiciones == posiciones
+
+    def test_clics_y_dibujo_siguen_funcionando_con_zoom(self, vista):
+        girar_rueda(vista, posicion(vista, 3), 3)
+        clic(vista, posicion(vista, 3))
+        assert vista.seleccionado == 3
+        vista.ejecutar_bfs(1)  # redibujar conserva el zoom
+        assert vista.lienzo.ejes.get_xlim()[1] - vista.lienzo.ejes.get_xlim()[0] == pytest.approx(1 / 1.25 ** 3)
+
+    def test_clic_fuera_del_area_no_crea_nodos(self, vista):
+        vista.lienzo.alejar()
+        vista.lienzo.alejar()
+        clic(vista, (1.2, 0.5))
+        assert vista.modelo.grafo.number_of_nodes() == 8
 
 
 class TestExportar:

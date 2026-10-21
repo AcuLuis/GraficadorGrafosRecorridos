@@ -70,17 +70,23 @@ class MainWindow(QMainWindow):
             ("Recorrido Seleccionado", vista.conservar_recorrido, "Ctrl+R"),
         ])
         self._agregar_menu("&Algoritmos", [
-            (BFS, lambda *_: vista.pedir_inicio_y_ejecutar(vista.ejecutar_bfs), "Ctrl+1"),
-            (DFS, lambda *_: vista.pedir_inicio_y_ejecutar(vista.ejecutar_dfs), "Ctrl+2"),
+            (BFS, lambda: vista.pedir_inicio_y_ejecutar(vista.ejecutar_bfs), "Ctrl+1"),
+            (DFS, lambda: vista.pedir_inicio_y_ejecutar(vista.ejecutar_dfs), "Ctrl+2"),
             None,
             (KRUSKAL, vista.ejecutar_kruskal, "Ctrl+3"),
-            (PRIM, lambda *_: vista.pedir_inicio_y_ejecutar(vista.ejecutar_prim), "Ctrl+5"),
+            (PRIM, lambda: vista.pedir_inicio_y_ejecutar(vista.ejecutar_prim), "Ctrl+5"),
             None,
-            (DIJKSTRA, lambda *_: vista.pedir_inicio_destino_y_ejecutar(vista.ejecutar_dijkstra), "Ctrl+4"),
-            (BELLMAN_FORD, lambda *_: vista.pedir_inicio_destino_y_ejecutar(vista.ejecutar_bellman_ford), "Ctrl+6"),
+            (DIJKSTRA, lambda: vista.pedir_inicio_destino_y_ejecutar(vista.ejecutar_dijkstra), "Ctrl+4"),
+            (BELLMAN_FORD, lambda: vista.pedir_inicio_destino_y_ejecutar(vista.ejecutar_bellman_ford), "Ctrl+6"),
             None,
             (TOPOLOGICO, vista.ejecutar_topologico, "Ctrl+7"),
             (CICLOS, vista.ejecutar_ciclos, "Ctrl+8"),
+        ])
+        lienzo = vista.lienzo
+        self._agregar_menu("&Ver", [
+            ("Acercar", lienzo.acercar, teclas.ZoomIn),
+            ("Alejar", lienzo.alejar, teclas.ZoomOut),
+            ("Restablecer Vista", lienzo.restablecer_vista, "Ctrl+0"),
         ])
         reproductor = vista.reproductor
         self._agregar_menu("&Pasos", [
@@ -102,7 +108,8 @@ class MainWindow(QMainWindow):
                 texto, funcion, atajo = elemento
                 accion = QAction(texto, self)
                 accion.setShortcut(QKeySequence(atajo))
-                accion.triggered.connect(funcion)
+                # Se descarta el argumento "checked" de la señal: no debe llegar a parámetros opcionales.
+                accion.triggered.connect(lambda *_, funcion=funcion: funcion())
                 elemento = accion
             menu.addAction(elemento)
         return menu
